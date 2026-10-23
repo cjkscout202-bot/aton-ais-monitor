@@ -25,9 +25,13 @@ Codespace 자동 삭제로 손실된 프로젝트를 복원한 **완전 빌드 �
   - USB NMEA/설정포트 경로는 **영향 없음**(설정 읽기·쓰기 포함 전부 정상).
   - 필요 시 AIS-catcher 브리지를 다시 올려 확장 가능.
 
-## 빌드 방법
-1. Android Studio 또는 Codespace에서 `AISWatch/` 열기 (Gradle sync → Run).
-2. Gradle wrapper가 없으면 `gradle wrapper` 1회 실행(스튜디오는 자동).
+## 빌드 방법 — GitHub Actions 자동 빌드
+이 복구본에는 `.github/workflows/build-apk.yml` 이 포함되어 있습니다(압축 해제 시 저장소 루트에 생성).
+`AISWatch/` 소스를 **main 브랜치에 push하면 APK가 자동으로 빌드**됩니다.
+
+- 빌드 결과(APK)는 저장소 **Actions 탭 → 해당 실행 → Artifacts → `AtoN-AIS-debug-apk`** 에서 내려받습니다.
+- 수동 실행: Actions 탭 → `Build APK` → `Run workflow`.
+- 로컬(Android Studio)에서도 `AISWatch/` 를 열어 바로 빌드할 수 있습니다.
 
 ## ⚠️ 재발 방지 — 반드시 git 커밋·푸시
 이번 사고 원인은 **소스가 git에 없고 Codespace 안에만 있었던 것**입니다.

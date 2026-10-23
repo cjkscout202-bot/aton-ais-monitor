@@ -6,6 +6,7 @@ plugins {
 android {
     namespace 'com.aiswatch'
     compileSdk 34
+    ndkVersion "25.1.8937393"   // GitHub Actions 네이티브 빌드 버전 고정
 
     defaultConfig {
         applicationId "com.aiswatch"

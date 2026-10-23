@@ -1,0 +1,45 @@
+name: Build APK
+
+# main 브랜치에 push할 때마다, 또는 수동 실행 시 APK를 빌드한다.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'AISWatch/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: JDK 17 설치
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK 설치
+        uses: android-actions/setup-android@v3
+
+      - name: NDK · CMake 설치 (네이티브 빌드용)
+        run: sdkmanager "ndk;25.1.8937393" "cmake;3.22.1"
+
+      - name: Gradle 설치
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2'
+
+      - name: Debug APK 빌드
+        working-directory: AISWatch
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: APK 업로드 (Artifacts에서 다운로드)
+        uses: actions/upload-artifact@v4
+        with:
+          name: AtoN-AIS-debug-apk
+          path: AISWatch/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
