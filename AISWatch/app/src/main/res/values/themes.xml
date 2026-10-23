@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AtoNAIS" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#1A56DB</item>
+        <item name="colorPrimaryVariant">#1E3A5F</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:windowBackground">#070D1A</item>
+        <item name="android:statusBarColor">#0D1628</item>
+        <item name="android:navigationBarColor">#0D1628</item>
+    </style>
+</resources>

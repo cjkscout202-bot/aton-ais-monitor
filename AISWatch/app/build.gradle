@@ -1,0 +1,86 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.aiswatch'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.aiswatch"
+        minSdk 26              // Android 8.0 이상 (USB Host API 안정)
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+
+        // NDK ABI 필터 (ARM 계열만)
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
+
+        // CMake 빌드 설정
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17"
+                cFlags   "-O2 -DANDROID -D_REENTRANT"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    // CMakeLists.txt 경로
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            debuggable true
+            jniDebuggable true
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    // 웹앱 assets 번들
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+
+    // NanoHTTPD — 내장 HTTP 서버 (MIT 라이선스)
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+
+    // USB 시리얼 — USB NMEA 수신기 / AtoN 설정포트(RS-232) 통신 (MIT, JitPack)
+    implementation 'com.github.mik3y:usb-serial-for-android:3.7.0'
+
+    // Material Design
+    implementation 'com.google.android.material:material:1.11.0'
+}

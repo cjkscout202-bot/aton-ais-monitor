@@ -1,0 +1,2791 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>해로드 AIS</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#eef2f7;--panel:#ffffff;--border:#94a3b8;--amber:#b45309;--cyan:#0369a1;--violet:#7c3aed;--green:#15803d;--red:#b91c1c;--text:#0f172a;--dim:#475569;--shadow:0 2px 8px rgba(0,0,0,.12)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;height:100dvh;-webkit-font-smoothing:antialiased}
+.topbar{background:var(--panel);border-bottom:2px solid var(--border);padding:0 12px;display:flex;align-items:center;gap:6px;flex-shrink:0;box-shadow:var(--shadow);min-height:44px;overflow:hidden}
+.logo{font-size:15px;font-weight:800;color:var(--amber)}
+.badge{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;border:1px solid var(--border);font-size:11px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:all .4s}
+.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.blink{background:#4ade80;box-shadow:0 0 14px #4ade80;transform:scale(1.7)}
+.dot.err{background:var(--red)}
+.stats{display:flex;gap:5px;margin-left:auto}
+.sc{background:var(--bg);border:2px solid var(--border);border-radius:6px;padding:3px 9px;text-align:center;min-width:46px;box-shadow:inset 0 1px 3px rgba(0,0,0,.08)}
+.sc .n{font-size:15px;font-weight:800;font-family:monospace;line-height:1.1}
+.sc .l{font-size:9px;color:var(--dim)}
+.src-mode{font-size:12px;font-weight:800;color:var(--text);white-space:nowrap}
+.no-data{padding:24px 0;text-align:center;color:var(--dim);font-size:13px}
+.tcp-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);font-size:9px;font-weight:700;white-space:nowrap;color:var(--dim);flex-shrink:0}
+.tcp-badge.connected{background:#1e88e5;color:#fff;border-color:#1e88e5}
+#map-wrap{flex:1;position:relative;min-height:0;overflow:hidden}
+#topnav{display:flex;flex-shrink:0;background:var(--panel);border-bottom:2px solid var(--border)}
+#topnav button{flex:1 1 0;min-width:0;padding:7px 2px;text-align:center;font-size:11px;font-weight:800;border:none;background:transparent;color:var(--dim);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topnav button.active{color:#1e88e5;border-bottom-color:#1e88e5}
+#data-panel{position:absolute;top:0;left:0;right:0;bottom:0;z-index:600;background:var(--panel);display:flex;flex-direction:column}
+.panel-title2{padding:8px 12px;font-weight:800;font-size:13px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#map{width:100%;height:100%}
+.layer-btn{position:absolute;top:10px;right:10px;z-index:500;display:flex;gap:4px}
+.layer-btn-left{position:absolute;top:10px;left:10px;z-index:500;display:flex;gap:4px}
+.lbtn{padding:5px 9px;border-radius:18px;border:1px solid rgba(255,255,255,.25);background:rgba(7,13,26,.85);backdrop-filter:blur(4px);color:#fff;font-size:11px;cursor:pointer;font-weight:600;white-space:nowrap}
+.lbtn.active{background:var(--amber);color:#fff;border-color:var(--amber);box-shadow:0 2px 6px rgba(180,83,9,.4)}
+#bottom-panel{position:absolute;bottom:0;left:0;right:0;z-index:400;background:var(--panel);border-top-left-radius:18px;border-top-right-radius:18px;border-top:2px solid var(--border);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;max-height:78dvh;box-shadow:0 -4px 24px rgba(0,0,0,.2)}
+#bottom-panel.collapsed{transform:translateY(calc(100% - 50px))}
+#bottom-panel.expanded{transform:translateY(0)}
+.panel-handle{padding:9px;text-align:center;cursor:pointer;flex-shrink:0}
+.handle-bar{width:38px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 3px}
+.panel-title{font-size:11px;color:var(--dim);font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px}
+.panel-cnt{background:var(--amber);color:#000;font-size:10px;font-weight:800;padding:1px 7px;border-radius:10px;font-family:monospace}
+.tab-bar{display:flex;border-bottom:2px solid var(--border);flex-shrink:0;padding:0 12px;background:var(--panel)}
+.tab{flex:1;padding:7px 4px;text-align:center;font-size:12px;font-weight:800;border:none;background:transparent;color:var(--dim);cursor:pointer;border-bottom:3px solid transparent}
+.tab.active{color:var(--amber);border-bottom-color:var(--amber)}
+.filter-row{padding:6px 8px;display:flex;gap:5px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--border)}
+.filter-row::-webkit-scrollbar{display:none}
+.fb{flex:1;min-width:0;padding:6px 3px;border-radius:12px;border:2px solid var(--border);background:var(--panel);color:var(--dim);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.fc{font-weight:800;color:#b45309}
+.fb.active{background:var(--amber);border-color:var(--amber);color:#fff;box-shadow:0 2px 6px rgba(180,83,9,.4)}
+.fb.active .fc{color:#fff}
+.list-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.ship-row{padding:10px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;cursor:pointer;background:var(--panel)}
+.ship-row:active{background:rgba(240,165,0,.08)}
+.ship-row.sel{background:rgba(240,165,0,.1)}
+.row-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.row-name{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-meta{font-size:11px;color:var(--dim);font-family:monospace;margin-top:2px}
+.row-right{text-align:right;flex-shrink:0}
+.row-time{font-size:10px;color:var(--dim);margin-bottom:3px}
+.row-dot{width:7px;height:7px;border-radius:50%;margin-left:auto}
+#detail-view{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:2000;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
+#detail-view.open{transform:translateX(0)}
+.detail-header{padding:12px 14px;border-bottom:2px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--panel);box-shadow:var(--shadow)}
+.back-btn{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);background:var(--bg);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:var(--shadow)}
+.det-titlewrap{flex:1;min-width:0}
+.det-name{font-size:15px;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.det-mmsi{font-size:11px;color:#64748b;font-family:monospace;margin-top:1px;letter-spacing:.3px}
+.type-chip{padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;flex-shrink:0}
+.det-body{flex:1;overflow-y:auto;padding:14px}
+.section{background:var(--panel);border:1px solid var(--border);border-radius:11px;margin-bottom:11px;overflow:hidden;box-shadow:var(--shadow)}
+.sec-title{padding:9px 14px;font-size:10px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--bg)}
+.field{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);gap:10px}
+.field:last-child{border-bottom:none}
+.fk{font-size:11px;color:var(--dim);flex-shrink:0}
+.fv{font-size:12px;font-weight:700;font-family:monospace;text-align:right;max-width:66%;overflow-wrap:anywhere;word-break:normal;line-height:1.45;color:var(--text)}
+.fresh-bar{height:3px;border-radius:2px;background:var(--border);margin-bottom:11px;overflow:hidden}
+.ff{height:100%;border-radius:2px;transition:width .5s}
+.alert-box{background:#fef2f2;border:2px solid var(--red);border-radius:10px;padding:10px;text-align:center;color:var(--red);font-size:13px;font-weight:800;margin-bottom:10px;animation:blink 1.2s ease-in-out infinite;box-shadow:0 2px 8px rgba(185,28,28,.2)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.5}}
+.virtual-box{background:#f5f3ff;border:2px solid var(--violet);border-radius:10px;padding:9px;color:var(--violet);font-size:11px;font-weight:700;text-align:center;margin-bottom:10px}
+.close-b{width:100%;padding:8px;background:var(--panel);border:2px solid var(--border);border-radius:7px;color:var(--dim);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px}
+.close-b:hover{border-color:var(--amber);color:var(--amber)}
+/* 상세 탭 */
+.det-tabs{display:flex;border-bottom:2px solid var(--border);flex-shrink:0;padding:0 2px;margin-bottom:12px;background:var(--panel)}
+.det-tab{flex:1;padding:8px 4px;text-align:center;font-size:11px;font-weight:800;border:none;background:transparent;color:var(--dim);cursor:pointer;border-bottom:3px solid transparent}
+.det-tab.active{color:var(--amber);border-bottom-color:var(--amber)}
+.det-tab-pane{display:none}.det-tab-pane.active{display:block}
+/* AtoN Status */
+.status-grid{padding:4px 0}
+.status-bit{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel)}
+.status-bit:last-child{border-bottom:none}
+.bit-led{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.bit-led.ok{background:#15803d;box-shadow:0 0 5px #15803d}
+.bit-led.warn{background:#b91c1c;box-shadow:0 0 6px #b91c1c;animation:blink 1s ease-in-out infinite}
+.bit-led.reserved{background:var(--dim)}
+.bit-info{flex:1}
+.bit-name{font-size:12px;font-weight:700;color:var(--text)}
+.bit-desc{font-size:10px;color:var(--dim);margin-top:1px}
+.bit-val{font-size:11px;font-family:monospace;font-weight:800;flex-shrink:0}
+/* 수신기록 */
+.hist-item{background:var(--panel);border:2px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:7px;cursor:pointer;box-shadow:var(--shadow)}
+.hist-ts{font-size:11px;font-weight:700;color:var(--amber);font-family:monospace;margin-bottom:5px}
+.hist-fields{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.hist-field{font-size:10px;color:var(--dim);display:flex;gap:4px}
+.hist-field span{color:var(--text);font-weight:600}
+.hist-toggle{font-size:9px;color:var(--violet);cursor:pointer;margin-top:3px;display:inline-block}
+.load-btn-sm{width:100%;padding:10px;background:var(--amber);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:800;cursor:pointer;margin-bottom:8px;box-shadow:0 2px 6px rgba(180,83,9,.3)}
+.load-btn-sm:hover{border-color:var(--amber);color:var(--amber)}
+.no-data{padding:24px;text-align:center;color:var(--dim);font-size:12px}
+/* MSG6 */
+.msg6-card{background:var(--panel);border:2px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:9px;box-shadow:var(--shadow)}
+.msg6-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.msg6-ts{font-size:11px;font-weight:700;color:var(--amber);font-family:monospace}
+.msg6-fi{font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(0,212,255,.15);color:var(--cyan)}
+.sensor-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+.sensor-item{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 8px}
+.sensor-label{font-size:9px;color:var(--dim);margin-bottom:2px}
+.sensor-val{font-size:12px;font-weight:700;font-family:monospace}
+.status-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.status-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700;border:1px solid}
+.pill-ok{background:#f0fdf4;color:#15803d;border-color:#86efac}
+.pill-err{background:#fef2f2;color:#b91c1c;border-color:#fca5a5}
+.pill-off{background:#f8fafc;color:var(--dim);border-color:var(--border)}
+/* MSG8 기상 */
+.wx-title{font-size:10px;font-weight:800;color:var(--cyan);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding-left:2px}
+.wx-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.wx-item{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px}
+.wx-k{font-size:10px;color:var(--dim);margin-bottom:2px}
+.wx-v{font-size:13px;font-weight:700;font-family:monospace;color:var(--text)}
+.wx-unit{font-size:10px;color:var(--dim);margin-left:2px}
+/* Leaflet 팝업 */
+.leaflet-popup-content-wrapper{background:var(--panel);border:2px solid var(--border);border-radius:10px;color:var(--text);box-shadow:0 6px 28px rgba(0,0,0,.25)}
+.leaflet-popup-tip{background:var(--panel)}
+.leaflet-popup-content{margin:6px 9px;min-width:130px;max-width:200px}
+.pu-name{font-size:11px;font-weight:800;color:#0f172a;margin-bottom:0;padding-right:4px;line-height:1.2;word-break:break-all}
+.pu-mmsi{font-size:9px;color:#64748b;font-family:monospace;margin:0 0 3px 0;letter-spacing:.2px}
+.pu-row{font-size:9.5px;display:flex;justify-content:space-between;margin:2px 0;gap:4px;align-items:baseline}
+.pl{color:var(--dim);white-space:nowrap;flex-shrink:0}
+.pv{color:var(--text);font-family:monospace;text-align:right;flex:1;min-width:0;word-break:break-word;line-height:1.4}
+.pu-btn{width:100%;margin-top:4px;padding:4px;border-radius:6px;border:none;background:var(--amber);color:#fff;font-size:10px;font-weight:800;cursor:pointer}
+
+/* AIS-catcher 연결 안내 */
+#guide-overlay{position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.7);z-index:900;display:flex;align-items:center;justify-content:center}
+#guide-overlay.hide{display:none}
+.guide-card{background:#fff;border-radius:12px;padding:12px 14px;max-width:240px;width:72%;box-shadow:0 6px 24px rgba(0,0,0,.3);overflow-x:hidden}
+.guide-title{font-size:16px;font-weight:800;color:#1e3a5f;margin-bottom:4px}
+.guide-sub{font-size:11px;color:#64748b;margin-bottom:14px}
+.guide-step{background:#f0f9ff;border-radius:8px;padding:10px 12px;
+  margin-bottom:8px;font-size:12px;color:#0f172a;line-height:1.6}
+.guide-step strong{color:#1a56db}
+.guide-ok{width:100%;padding:11px;background:#15803d;color:#fff;
+  border:none;border-radius:10px;font-size:13px;font-weight:800;
+  cursor:pointer;margin-top:6px}
+.guide-skip{width:100%;padding:7px;background:transparent;color:#94a3b8;
+  border:none;font-size:11px;cursor:pointer;margin-top:4px}
+/* 수신 통계 바 */
+.stat-bar{background:var(--panel);border-bottom:1px solid var(--border);
+  padding:5px 10px;display:flex;gap:7px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;align-items:center;
+  font-size:11px;color:var(--dim);flex-shrink:0;scrollbar-width:none}
+.stat-bar::-webkit-scrollbar{display:none}
+.stat-item{white-space:nowrap;display:flex;gap:3px;align-items:center}
+.stat-num{font-weight:800;font-family:monospace;color:var(--text)}
+.stat-sep{color:var(--border)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">⚓ AtoN AIS</div>
+  <div class="badge"><div class="dot" id="dot"></div><span id="stxt">대기</span></div>
+  <span id="src-mode" class="src-mode" style="font-size:9px;font-weight:700;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0"></span>
+  <span id="tcp-badge" class="tcp-badge" style="flex-shrink:0">TCP 대기</span>
+</div>
+
+</div>
+
+<!-- AIS-catcher 연결 안내 모달 -->
+<div id="guide-overlay" class="hide" onclick="if(event.target===this)closeGuide()">
+  <div class="guide-card">
+    <div class="guide-title">사용법</div>
+    <div class="guide-sub">USB를 꽂으면 장치 종류를 자동으로 감지합니다</div>
+    <div class="guide-step">
+      <strong>① RTL-SDR AIS 동글</strong><br>
+      RTL-SDR 동글 → OTG 케이블 → 스마트폰<br>
+      USB 권한 허용 시 자동으로 SDR 복조 수신 시작
+    </div>
+    <div class="guide-step">
+      <strong>② USB NMEA AIS 수신기</strong><br>
+      AIS 수신기 → OTG 케이블 → 스마트폰<br>
+      USB 권한 허용 시 자동으로 NMEA 수신 시작
+    </div>
+    <div class="guide-step">
+      <strong>③ AIS 데이터 외부 제공 (TCP)</strong><br>
+      다른 앱에서 <strong>127.0.0.1:10110</strong> 접속 시<br>
+      수신 중인 AIS 데이터를 NMEA 형식으로 전달
+    </div>
+  </div>
+</div>
+
+<!-- 수신 통계 바 -->
+<div class="stat-bar" id="stat-bar">
+  <div class="stat-item">🕐 업타임 <span class="stat-num" id="st-uptime">00:00</span></div>
+  <div class="stat-sep">|</div>
+  <div class="stat-item">📨 총수신 <span class="stat-num" id="st-total">0</span></div>
+  <div class="stat-sep">|</div>
+  <div class="stat-item">⚡ <span class="stat-num" id="st-rpm">0</span>문/분</div>
+
+</div>
+
+<div id="topnav">
+  <button id="nav-map" class="active" onclick="showView('map',this)">🗺 지도</button>
+  <button id="nav-list" onclick="showView('list',this)">📋 목록</button>
+  <button id="nav-nmea" onclick="showView('nmea',this)">📡 NMEA</button>
+  <button id="nav-guide" onclick="showView('guide',this)">📖 사용법</button>
+  <button id="nav-analysis" onclick="showView('analysis',this)">📊 분석</button>
+  <button id="nav-config" onclick="showView('config',this)">⚙️ 설정</button>
+</div>
+<div class="filter-row" id="filter-row">
+  <button class="fb active" onclick="setF('all',this)">전체 <span class="fc" id="fc-all"></span></button>
+  <button class="fb" onclick="setF('vessel',this)">🚢 선박 <span class="fc" id="fc-vessel"></span></button>
+  <button class="fb" onclick="setF('physical',this)">🔦 물리 <span class="fc" id="fc-physical"></span></button>
+  <button class="fb" onclick="setF('virtual',this)">🔵 가상 <span class="fc" id="fc-virtual"></span></button>
+</div>
+
+<div id="map-wrap">
+  <div id="map"></div>
+  <div class="layer-btn-left">
+    <button class="lbtn active" onclick="switchLayer('osm',this)">🗺</button>
+    <button class="lbtn" onclick="switchLayer('satellite',this)">🛰</button>
+    <button class="lbtn" onclick="switchLayer('topo',this)">⛰</button>
+  </div>
+  <div class="layer-btn">
+    <button class="lbtn" onclick="showMyLocation()" title="내 위치">📍</button>
+    <button class="lbtn" onclick="openAlertCfg()" title="접근 경보">🔔</button>
+    <button class="lbtn" id="measure-btn" onclick="toggleMeasure(this)" title="거리측정">📏</button>
+  </div>
+<div id="measure-readout" style="display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:1100;background:rgba(20,25,32,.92);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;max-width:92%;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>
+<div id="alert-banner" style="display:none;position:absolute;bottom:72px;left:50%;transform:translateX(-50%);z-index:1200;background:#c62828;color:#fff;padding:8px 14px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.4);font-size:13px;font-weight:700;max-width:92%;text-align:center;line-height:1.4"></div>
+<div id="alert-cfg" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;z-index:1300;background:rgba(0,0,0,.45)">
+  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%;max-width:340px;background:#1e2530;color:#e8eef5;border-radius:14px;padding:16px;font-size:13px;box-shadow:0 4px 20px rgba(0,0,0,.5)">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px">🔔 선박 접근 경보</div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" id="ac-on" onchange="acApply()"> 경보 켜기</label>
+    <div style="margin:10px 0">반경 <span id="ac-radlabel" style="float:right;color:#7fd6ff">1000 m</span>
+      <input type="range" id="ac-rad" min="100" max="2000" step="100" value="1000" oninput="acApply()" style="width:100%">
+    </div>
+    <div style="margin:10px 0">감시 방향
+      <select id="ac-dir" onchange="acApply()" style="width:100%;margin-top:4px;background:#2a3340;color:#e8eef5;border:1px solid #3a4655;border-radius:6px;padding:6px">
+        <option value="all">전방향 (360°)</option>
+        <option value="sector">특정 방위</option>
+      </select>
+    </div>
+    <div id="ac-sector" style="display:none;margin:8px 0">
+      중심방위 <input type="number" id="ac-brg" min="0" max="359" value="0" oninput="acApply()" style="width:64px;background:#2a3340;color:#e8eef5;border:1px solid #3a4655;border-radius:6px;padding:4px">°
+      &nbsp; 폭 ± <input type="number" id="ac-half" min="10" max="180" value="45" oninput="acApply()" style="width:58px;background:#2a3340;color:#e8eef5;border:1px solid #3a4655;border-radius:6px;padding:4px">°
+    </div>
+    <label id="ac-appr-wrap" style="display:none;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" id="ac-appr" checked onchange="acApply()"> 접근(내 쪽으로 오는) 선박만</label>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" id="ac-cpa" checked onchange="acApply()"> CPA/TCPA 정밀판정</label>
+    <div id="ac-cpafields" style="margin:4px 0 4px 24px">
+      CPA 경보거리 <input type="number" id="ac-cpalim" min="50" max="2000" value="300" oninput="acApply()" style="width:70px;background:#2a3340;color:#e8eef5;border:1px solid #3a4655;border-radius:6px;padding:4px"> m<br>
+      <span style="display:inline-block;margin-top:6px">TCPA 이내 <input type="number" id="ac-tcpalim" min="1" max="60" value="10" oninput="acApply()" style="width:60px;background:#2a3340;color:#e8eef5;border:1px solid #3a4655;border-radius:6px;padding:4px"> 분</span>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0"><input type="checkbox" id="ac-snd" checked onchange="acApply()"> 경고음</label>
+    <div style="font-size:11px;color:#9fb0c0;margin-top:6px">※ 경보를 켜면 내 위치를 자동 추적합니다. 위치 권한이 필요합니다.</div>
+    <div style="text-align:right;margin-top:12px">
+      <button onclick="closeAlertCfg()" style="background:#2e7d32;color:#fff;border:0;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700">확인</button>
+    </div>
+  </div>
+</div>
+  <div id="data-panel" style="display:none">
+    <div class="panel-title2"><span id="panelTitle">목록</span><span class="panel-cnt" id="panelCnt">0</span></div>
+    <div class="list-body" id="list-body"></div>
+    <div id="nmea-body" style="display:none;flex:1;overflow-y:auto;padding:10px 12px;font-family:monospace;font-size:11px"></div>
+    <!-- 분석 패널 -->
+    <div id="analysis-panel" style="display:none;flex-direction:column;height:100%;overflow-y:auto;padding:12px 10px">
+      <!-- 실시간 RF 모니터 (MMSI 무관, 현장 안테나 점검용) -->
+      <div style="background:var(--panel);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-weight:800;font-size:13px;color:var(--cyan)">📡 실시간 RF 모니터</div>
+          <div id="livrf-rpm" style="font-size:11px;color:var(--dim)">-</div>
+        </div>
+        <div style="text-align:center;padding:6px 0 10px">
+          <div style="font-size:11px;color:var(--dim)">최강 신호 (가장 가까운 송신기)</div>
+          <div id="livrf-max" style="font-weight:800;font-size:30px;color:var(--green);line-height:1.1;margin:2px 0">--</div>
+          <div id="livrf-maxinfo" style="font-size:11px;color:var(--dim)">수신 대기 중…</div>
+        </div>
+        <!-- 방향탐색용 막대 -->
+        <div style="height:14px;background:var(--bg);border-radius:7px;overflow:hidden;margin:6px 0 4px;border:1px solid var(--border)">
+          <div id="livrf-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#16a34a,#22c55e);transition:width .3s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-around;font-size:11px;color:var(--dim);margin-top:6px">
+          <span>평균 <b id="livrf-avg" style="color:var(--text)">-</b></span>
+          <span>노이즈 <b id="livrf-nf" style="color:var(--text)">-</b></span>
+          <span>SNR <b id="livrf-snr" style="color:var(--text)">-</b></span>
+          <span>신호원 <b id="livrf-cnt" style="color:var(--text)">0</b></span>
+        </div>
+        <!-- AIS 2채널 세기 (3A) -->
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--dim);margin-bottom:6px">AIS 채널 활성도 (최근 10초)</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:800;width:70px">A 161.975</span>
+            <div style="flex:1;height:16px;background:var(--bg);border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+              <div id="ch-a-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#0891b2,#22d3ee);transition:width .3s"></div>
+            </div>
+            <span id="ch-a-val" style="font-size:11px;width:78px;text-align:right;color:var(--dim)">-</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;font-weight:800;width:70px">B 162.025</span>
+            <div style="flex:1;height:16px;background:var(--bg);border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+              <div id="ch-b-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .3s"></div>
+            </div>
+            <span id="ch-b-val" style="font-size:11px;width:78px;text-align:right;color:var(--dim)">-</span>
+          </div>
+        </div>
+        <div id="livrf-list" style="margin-top:10px"></div>
+        <div style="font-size:10px;color:var(--dim);text-align:center;margin-top:8px">안테나를 연결·회전하며 최강 신호 dB 변화를 확인하세요 (2초마다 갱신 · 최근 30분)</div>
+      </div>
+      <div style="background:var(--panel);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)">
+        <div style="font-weight:800;font-size:13px;color:var(--amber);margin-bottom:10px">기준값 설정 <span style="font-weight:400;color:var(--dim);font-size:10px">(특정 AtoN 주기·판정용, 선택)</span></div>
+        <label style="font-size:11px;color:var(--dim)">대상 MMSI</label>
+        <input id="ref-mmsi" type="text" placeholder="994xxxxxx" maxlength="9" inputmode="numeric"
+          style="display:block;width:100%;box-sizing:border-box;margin:4px 0 8px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:monospace">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><label style="font-size:11px;color:var(--dim)">정상 RF (dBm)</label>
+            <input id="ref-rf" type="number" placeholder="-40" step="1"
+              style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"></div>
+          <div><label style="font-size:11px;color:var(--dim)">허용범위 (±dB)</label>
+            <input id="ref-rf-margin" type="number" placeholder="5" step="1" min="1" max="20"
+              style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div><label style="font-size:11px;color:var(--dim)">MT21 주기(초)</label>
+            <input id="ref-p21" type="number" placeholder="180" step="10" min="10"
+              style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"></div>
+          <div><label style="font-size:11px;color:var(--dim)">MT6 주기(초)</label>
+            <input id="ref-p6" type="number" placeholder="600" step="10" min="10"
+              style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"></div>
+          <div><label style="font-size:11px;color:var(--dim)">MT8 주기(초)</label>
+            <input id="ref-p8" type="number" placeholder="600" step="10" min="10"
+              style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"></div>
+        </div>
+        <button onclick="saveRef()" style="width:100%;padding:9px;border-radius:8px;background:var(--amber);color:#fff;font-weight:800;font-size:13px;border:none;cursor:pointer">기준값 저장</button>
+      </div>
+      <div style="background:var(--panel);border-radius:10px;padding:14px;box-shadow:var(--shadow)">
+        <div style="font-weight:800;font-size:13px;color:var(--cyan);margin-bottom:10px">신호 분석 결과</div>
+        <div id="analysis-body" style="text-align:center;color:var(--dim);font-size:12px;padding:20px 0">기준값을 저장한 후 분석 시작을 누르세요.</div>
+        <button onclick="startAnalysis()" style="width:100%;margin-top:10px;padding:10px;border-radius:8px;background:var(--cyan);color:#fff;font-weight:800;font-size:14px;border:none;cursor:pointer">분석 시작</button>
+      </div>
+    </div>
+    <div id="config-panel" style="display:none;flex-direction:column;height:100%;overflow-y:auto;padding:12px 10px"></div>
+    <div id="guide-body" style="display:none;flex:1;overflow-y:auto;padding:16px"></div>
+  </div>
+</div>
+<div id="detail-view">
+  <div class="detail-header">
+    <button class="back-btn" onclick="closeDetail()">&#8249;</button>
+    <div class="det-titlewrap">
+      <div class="det-name" id="det-title">상세정보</div>
+      <div class="det-mmsi" id="det-mmsi"></div>
+    </div>
+  </div>
+  <div class="det-body" id="det-body"></div>
+</div>
+<script>
+// ── 전역 헬퍼 ─────────────────────────────────────────────────────
+// (updateStats 내부에 지역 el이 있어서, 분석 탭 함수들이 el 미정의로 죽던 문제 수정)
+function el(id){return document.getElementById(id);}
+// ── 상수 ──────────────────────────────────────────────────────────
+const ATON_T={
+  0:{cat:"기타",en:"Default/Type not specified",ko:"미지정"},
+  1:{cat:"기타",en:"Reference point",ko:"기준점"},
+  2:{cat:"기타",en:"RACON",ko:"레이콘"},
+  3:{cat:"고정",en:"Fixed structure, offshore",ko:"고정구조물(해상)"},
+  4:{cat:"기타",en:"Spare 4",ko:"예비"},
+  5:{cat:"고정",en:"Light, without sectors",ko:"단일등"},
+  6:{cat:"고정",en:"Light, with sectors",ko:"섹터등"},
+  7:{cat:"고정",en:"Leading Light Front",ko:"도등(전방등)"},
+  8:{cat:"고정",en:"Leading Light Rear",ko:"도등(후방등)"},
+  9:{cat:"고정",en:"Beacon, Cardinal N",ko:"방위표지(북방위)"},
+  10:{cat:"고정",en:"Beacon, Cardinal E",ko:"방위표지(동방위)"},
+  11:{cat:"고정",en:"Beacon, Cardinal S",ko:"방위표지(남방위)"},
+  12:{cat:"고정",en:"Beacon, Cardinal W",ko:"방위표지(서방위)"},
+  13:{cat:"고정",en:"Beacon, Port hand",ko:"측면표지(좌현)"},
+  14:{cat:"고정",en:"Beacon, Starboard hand",ko:"측면표지(우현)"},
+  15:{cat:"고정",en:"Beacon, Preferred Channel port hand",ko:"선호수로표지(좌현)"},
+  16:{cat:"고정",en:"Beacon, Preferred Channel starboard",ko:"선호수로표지(우현)"},
+  17:{cat:"고정",en:"Beacon, Isolated danger",ko:"고립장해표지"},
+  18:{cat:"고정",en:"Beacon, Safe water",ko:"안전수역표지"},
+  19:{cat:"고정",en:"Beacon, Special mark",ko:"특수표지"},
+  20:{cat:"부유",en:"Cardinal Mark N",ko:"방위부표(북방위)"},
+  21:{cat:"부유",en:"Cardinal Mark E",ko:"방위부표(동방위)"},
+  22:{cat:"부유",en:"Cardinal Mark S",ko:"방위부표(남방위)"},
+  23:{cat:"부유",en:"Cardinal Mark W",ko:"방위부표(서방위)"},
+  24:{cat:"부유",en:"Port hand Mark",ko:"측면부표(좌현)"},
+  25:{cat:"부유",en:"Starboard hand Mark",ko:"측면부표(우현)"},
+  26:{cat:"부유",en:"Preferred Channel Port hand",ko:"선호수로부표(좌현)"},
+  27:{cat:"부유",en:"Preferred Channel Starboard hand",ko:"선호수로부표(우현)"},
+  28:{cat:"부유",en:"Isolated danger",ko:"고립장해부표"},
+  29:{cat:"부유",en:"Safe Water",ko:"안전수역부표"},
+  30:{cat:"부유",en:"Special Mark",ko:"특수부표"},
+  31:{cat:"부유",en:"Light Vessel / LANBY / Rigs",ko:"등선/LANBY/해양구조물"},
+};
+const EPFD_T={0:"미정의",1:"GPS",2:"GLONASS",3:"GPS+GLONASS",4:"Loran-C",5:"Chayka",6:"통합항법",7:"측량값",8:"Galileo",15:"내부GNSS"};
+const NAV_S=["항해중","묘박중","조종불능","조종제한","흘수제한","계류중","좌초","어로작업","항해중(무동력)","","","","","","","AIS-SART"];
+const SHIP_T={20:"날개선",30:"어선",31:"예인선",36:"요트",40:"고속선",50:"도선선",51:"SAR선",52:"예인선",55:"경찰선",60:"여객선",70:"화물선",80:"유조선",90:"기타선"};
+const SHIP_EN={20:"Wing in ground",30:"Fishing",31:"Towing",32:"Towing (large)",33:"Dredging",34:"Diving ops",35:"Military ops",36:"Sailing",37:"Pleasure craft",40:"High speed craft",50:"Pilot vessel",51:"Search & Rescue",52:"Tug",53:"Port tender",54:"Anti-pollution",55:"Law enforcement",58:"Medical transport",60:"Passenger",70:"Cargo",80:"Tanker",90:"Other"};
+function stype_en(t){if(!t)return"Unspecified";if(SHIP_EN[t])return SHIP_EN[t];var b=Math.floor(t/10)*10;return SHIP_EN[b]||("Type "+t);}
+const MSG_TYPE_DESC={1:"항법 위치보고",2:"항법 위치보고",3:"특수 위치보고",5:"선박 정적·항해 정보",6:"집약 메시지",8:"광역 방송 메시지",18:"Class B CS 위치보고",21:"항로표지 보고",24:"Class B 정적 정보"};
+// FATDMA MSG21 AtoN Status 8비트 — 표준 정의
+// [bit7 bit6 bit5][bit4 bit3][bit2 bit1][bit0]
+//  Page ID=111(7)  RACON(2)   Light(2)  Alarm(1)
+const ATON_RACON_S={
+  0:{en:"No RACON installed",         ko:"레이콘 미설치",               color:"var(--dim)"},
+  1:{en:"RACON installed not monitored",ko:"레이콘 설치됨 (미모니터링)",color:"#f0a500"},
+  2:{en:"RACON operational",           ko:"레이콘 정상 운용",           color:"var(--green)"},
+  3:{en:"RACON Error",                 ko:"레이콘 오류",                color:"var(--red)"},
+};
+const ATON_LIGHT_S={
+  0:{en:"No light or no monitoring",          ko:"등 없음 또는 미모니터링",    color:"var(--dim)"},
+  1:{en:"Light ON",                           ko:"점등 (정상)",               color:"var(--green)"},
+  2:{en:"Light OFF",                          ko:"소등",                      color:"#f0a500"},
+  3:{en:"Light fail or at reduced range",     ko:"등 고장 또는 광달거리 감소", color:"var(--red)"},
+};
+
+// ── 유틸 ──────────────────────────────────────────────────────────
+function aname(t){var d=ATON_T[t];return d?d.ko:"유형"+t;}
+function aname_en(t){var d=ATON_T[t];return d?d.en:"Type"+t;}
+function acat(t){var d=ATON_T[t];return d?d.cat:"기타";}
+function stype(t){if(!t)return"미분류";for(var k in SHIP_T)if(t>=+k&&t<=+k+9)return SHIP_T[k];return"유형"+t;}
+function stale(ts){var s=(Date.now()/1000)-ts;return s<300?"#00e676":s<600?"#f0a500":"#ff4455";}
+function ago(ts){var s=Math.floor((Date.now()/1000)-ts);if(s<5)return"방금";if(s<60)return s+"초전";if(s<3600)return Math.floor(s/60)+"분전";return Math.floor(s/3600)+"시간전";}
+function ago2(ts_full){try{var d=new Date(ts_full.replace(" ","T"));var s=Math.floor((Date.now()-d.getTime())/1000);if(s<60)return s+"초전";if(s<3600)return Math.floor(s/60)+"분전";return Math.floor(s/3600)+"시간전";}catch{return"-";}}
+
+// ── AIS-catcher 연결 안내 ──────────────────────────────
+var _guideShown = false;
+
+function closeGuide(){
+  document.getElementById('guide-overlay').classList.add('hide');
+  _guideShown = true;
+}
+
+function setRxStatus(receiving, blink){
+  var dot=document.getElementById('dot');
+  var stxt=document.getElementById('stxt');
+  if(receiving){
+    stxt.textContent='수신중';
+    _guideShown = true;
+    if(blink){ dot.className='dot on blink'; setTimeout(function(){ if(dot) dot.className='dot on'; }, 350); }
+    else if(!dot.classList.contains('on')){ dot.className='dot on'; }
+  } else {
+    dot.className='dot err';
+    stxt.textContent='대기';
+  }
+}
+function checkAisCatcher(ok){ setRxStatus(ok,false); }
+
+function fmtUptime(sec){
+  var h=Math.floor(sec/3600);
+  var m=Math.floor((sec%3600)/60);
+  var s=sec%60;
+  if(h>0) return h+'시간 '+m+'분';
+  if(m>0) return m+'분 '+s+'초';
+  return s+'초';
+}
+
+var _prevTotal=-1, _lastDataTime=0;
+function updateStats(st){
+  try{
+    var _md=document.getElementById('src-mode'),_tb=document.getElementById('tcp-badge');
+    if(_md){ var _m=(st.input_mode&&st.input_mode!=='-')?st.input_mode:''; _md.textContent=_m; _md.title=(st.input_device&&st.input_device!=='-')?st.input_device:''; }
+    if(_tb){ var _oo=(st.nmea_out&&st.nmea_out.startsWith('ON')); var _cs=_oo&&st.nmea_out.match(/C:(\d+)/); var _cn=_cs?parseInt(_cs[1]):0;
+      if(_cn>0){ _tb.textContent='TCP '+_cn+'명'; _tb.className='tcp-badge connected'; }
+      else{ _tb.textContent='TCP 대기'; _tb.className='tcp-badge'; } }
+  }catch(e){}
+  if(!st) return;
+  var _total=st.total_sentences||0, _now=Date.now(), _blink=false;
+  if(_prevTotal>=0 && _total>_prevTotal){ _lastDataTime=_now; _blink=true; }
+  else if(_prevTotal<0 && _total>0){ _lastDataTime=_now; }
+  _prevTotal=_total;
+  var _receiving=(_total>0)&&((_now-_lastDataTime)<15000);
+  setRxStatus(_receiving, _blink);
+  var el = function(id){return document.getElementById(id);};
+  if(el('st-uptime')) el('st-uptime').textContent=fmtUptime(st.uptime_sec||0);
+  if(el('st-total'))  el('st-total').textContent=(st.total_sentences||0).toLocaleString();
+  if(el('st-rpm'))    el('st-rpm').textContent=st.rx_per_min||0;
+
+  if(el('st-v'))      el('st-v').textContent=Object.keys(vessels).length;
+  if(el('st-p'))      el('st-p').textContent=Object.values(window._atons||{}).filter(function(a){return!a.virtual;}).length;
+  if(el('st-a'))      el('st-a').textContent=Object.values(window._atons||{}).filter(function(a){return a.virtual===true||a.virtual==="true";}).length;
+  if(el('st-m6'))     el('st-m6').textContent=st.total_msg6||0;
+  if(el('st-m8'))     el('st-m8').textContent=st.total_msg8||0;
+  // 배지도 업데이트
+  if(el('rxpm'))  el('rxpm').textContent=st.rx_per_min||0;
+  if(el('rxtot')) el('rxtot').textContent=(st.total_sentences||0).toLocaleString();
+}
+
+function utcLabel(v){
+  if(v==null||v===undefined)return"-";
+  var n=parseInt(v);
+  if(n>=0&&n<=59){
+    // 0-59: GNSS Fix 시각의 UTC 초 부분 (예: n=7 → GPS가 HH:MM:07에 위치 확정)
+    var ss=("0"+n).slice(-2);
+    return ss+"초 (GNSS Fix 시각의 UTC 초)";
+  }
+  if(n===60)return"미제공 — GNSS Fix 불명";
+  if(n===61)return"수동입력 모드";
+  if(n===62)return"추측항법 (DR)";
+  if(n===63)return"EPFS 불능";
+  return""+n;
+}
+function fmtLat(dd){if(dd==null)return"-";var hem=dd>=0?"N":"S";var abs=Math.abs(dd);var d=Math.floor(abs);var mf=(abs-d)*60;var mi=Math.floor(mf);var s=(mf-mi)*60;return abs.toFixed(6)+"° "+hem+"<br><small style='color:var(--dim)'>"+d+"° "+mf.toFixed(4)+"' "+hem+"</small><br><small style='color:var(--dim)'>"+d+"° "+mi+"' "+s.toFixed(2)+"\" "+hem+"</small>";}
+function fmtLon(dd){if(dd==null)return"-";var hem=dd>=0?"E":"W";var abs=Math.abs(dd);var d=Math.floor(abs);var mf=(abs-d)*60;var mi=Math.floor(mf);var s=(mf-mi)*60;return abs.toFixed(6)+"° "+hem+"<br><small style='color:var(--dim)'>"+d+"° "+mf.toFixed(4)+"' "+hem+"</small><br><small style='color:var(--dim)'>"+d+"° "+mi+"' "+s.toFixed(2)+"\" "+hem+"</small>";}
+function fmtLatPlain(dd){if(dd==null)return"-";var hem=dd>=0?"N":"S";var abs=Math.abs(dd);var d=Math.floor(abs);var mf=(abs-d)*60;return abs.toFixed(5)+"°"+hem+" ("+d+"°"+mf.toFixed(3)+"'"+hem+")";}
+function fmtLonPlain(dd){if(dd==null)return"-";var hem=dd>=0?"E":"W";var abs=Math.abs(dd);var d=Math.floor(abs);var mf=(abs-d)*60;return abs.toFixed(5)+"°"+hem+" ("+d+"°"+mf.toFixed(3)+"'"+hem+")";}
+
+// ── AtoN Status 비트 분석 ──────────────────────────────────────────
+function renderAtonStatusBits(val){
+  if(val==null) val=0;
+  var hex='0x'+val.toString(16).padStart(2,'0').toUpperCase();
+  var bin=val.toString(2).padStart(8,'0');
+  var pageId=(val>>5)&0x07;
+  var raconV=(val>>3)&0x03;
+  var lightV=(val>>1)&0x03;
+  var alarmV= val    &0x01;
+  var pageOk=(pageId===7);
+  var ri=ATON_RACON_S[raconV];
+  var li=ATON_LIGHT_S[lightV];
+  var pageC=pageOk?'var(--cyan)':'var(--red)';
+  var alarmC=alarmV?'var(--red)':'var(--green)';
+
+  // 비트박스 시각화
+  function bBox(v,c,label){
+    return '<div style="display:inline-flex;flex-direction:column;align-items:center;margin:0 1px">'
+      +'<div style="width:26px;height:26px;border-radius:5px;background:'+c
+      +';display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;color:#000;font-family:monospace">'+v+'</div>'
+      +'<div style="font-size:8px;color:var(--dim);margin-top:2px">'+label+'</div></div>';
+  }
+  var boxes=bBox((val>>7)&1,pageC,'7')+bBox((val>>6)&1,pageC,'6')+bBox((val>>5)&1,pageC,'5')
+    +'<div style="width:8px"></div>'
+    +bBox((val>>4)&1,ri.color,'4')+bBox((val>>3)&1,ri.color,'3')
+    +'<div style="width:8px"></div>'
+    +bBox((val>>2)&1,li.color,'2')+bBox((val>>1)&1,li.color,'1')
+    +'<div style="width:8px"></div>'
+    +bBox(alarmV,alarmC,'0');
+
+  var h='<div style="padding:10px 14px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-family:monospace;font-size:11px;color:var(--dim);margin-bottom:8px">'
+    +'원시값: <span style="color:var(--amber)">'+hex+'</span>'
+    +' = 0b<span style="color:var(--cyan)">'+bin+'</span>'
+    +(alarmV?'<span style="color:var(--red);font-weight:700;margin-left:8px">⚠ 경보</span>':'')
+    +'</div>'
+    +'<div style="display:flex;align-items:flex-end;margin-bottom:5px">'+boxes+'</div>'
+    +'<div style="display:flex;font-size:9px;font-weight:700;gap:2px">'
+    +'<span style="width:84px;text-align:center;color:'+pageC+'">Bit[7 6 5]</span>'
+    +'<span style="width:8px"></span>'
+    +'<span style="width:58px;text-align:center;color:'+ri.color+'">Bit[4 3]</span>'
+    +'<span style="width:8px"></span>'
+    +'<span style="width:58px;text-align:center;color:'+li.color+'">Bit[2 1]</span>'
+    +'<span style="width:8px"></span>'
+    +'<span style="width:28px;text-align:center;color:'+alarmC+'">Bit[0]</span>'
+    +'</div></div>';
+
+  h+='<div class="status-grid">';
+
+  // ① Page ID
+  h+='<div class="status-bit">'
+    +'<div class="bit-led '+(pageOk?'ok':'warn')+'"></div>'
+    +'<div class="bit-info">'
+    +'<div class="bit-name">Bit[7 6 5] &nbsp;<span style="color:var(--text)">페이지 식별자</span></div>'
+    +(pageOk?'':'<div class="bit-desc">⚠ 비유효 (111=7 이어야 함)</div>')
+    +'<div class="bit-val" style="color:'+pageC+';margin-top:4px">'+pageId.toString(2).padStart(3,'0')+(pageId===7?'(항로표지 자동 연계 사용)':pageId===0?'(항로표지 자동 연계 미사용)':'(비유효)')+'</div>'
+    +'</div>'
+    +'</div>';
+
+  // ② RACON Status
+  h+='<div class="status-bit">'
+    +'<div class="bit-led" style="background:'+ri.color+';box-shadow:0 0 5px '+ri.color+'40"></div>'
+    +'<div class="bit-info">'
+    +'<div class="bit-name">Bit[4 3] &nbsp;<span style="color:var(--text)">RACON Status (레이콘 상태)</span></div>'
+    +'<div class="bit-desc">00=미설치 &nbsp; 01=설치(미모니터) &nbsp; 10=정상 &nbsp; 11=오류</div>'
+    +'<div class="bit-val" style="color:'+ri.color+';margin-top:4px">'+raconV.toString(2).padStart(2,'0')+'('+ri.ko+')</div>'
+    +'</div></div>';
+
+  // ③ Light Status
+  h+='<div class="status-bit">'
+    +'<div class="bit-led" style="background:'+li.color+';box-shadow:0 0 5px '+li.color+'40"></div>'
+    +'<div class="bit-info">'
+    +'<div class="bit-name">Bit[2 1] &nbsp;<span style="color:var(--text)">Light Status (등명기 상태)</span></div>'
+    +'<div class="bit-desc">00=없음/미모니터 &nbsp; 01=점등 &nbsp; 10=소등 &nbsp; 11=고장/광달감소</div>'
+    +'<div class="bit-val" style="color:'+li.color+';margin-top:4px">'+lightV.toString(2).padStart(2,'0')+'('+li.ko+')</div>'
+    +'</div></div>';
+
+  // ④ Alarm Status
+  h+='<div class="status-bit">'
+    +'<div class="bit-led '+(alarmV?'warn':'ok')+'"></div>'
+    +'<div class="bit-info">'
+    +'<div class="bit-name">Bit[0] &nbsp;<span style="color:var(--text)">Alarm Status (종합 경보)</span></div>'
+    +'<div class="bit-desc">0=Good Health(정상) &nbsp; 1=Alarm(경보)</div>'
+    +'<div class="bit-val" style="color:'+alarmC+';margin-top:4px">'+(alarmV?'1(경보)':'0(정상)')+'</div>'
+    +'</div></div>';
+
+  h+='</div>';
+  return h;
+}
+
+// ── 수신기록 ──────────────────────────────────────────────────────
+var histCache={};
+async function loadHistory(mmsi){try{var r=await fetch(SERVER+'/history/'+mmsi+'.json',{signal:AbortSignal.timeout(4000)});var d=await r.json();histCache[mmsi]=d.history||[];return histCache[mmsi];}catch{return[];}}
+function renderHistoryItem(rec,idx){
+  var offStr=rec.off_position?'<span style="color:var(--red);font-weight:700">⚠이탈</span>':'<span style="color:var(--green)">✅정상</span>';
+  var hexStatus=rec.aton_status!=null?'0b'+rec.aton_status.toString(2).padStart(8,'0'):"0b00000000";
+  var hasWarn=rec.aton_status&&rec.aton_status!==0;
+  var rawHtml='';
+  if(rec.raw){var lines=rec.raw.split(" | ");rawHtml=lines.map(function(l){return'<div style="margin-bottom:3px;padding:3px 6px;background:rgba(0,0,0,.3);border-radius:4px;border-left:2px solid var(--amber)">'+l+'</div>';}).join("");}
+  else rawHtml='<span style="color:var(--dim)">(NMEA 원문 없음)</span>';
+  return'<div class="hist-item" id="hist-'+idx+'">'
+    +'<div class="hist-ts">'+(rec.ts_full||rec.ts)+' <span style="color:var(--dim);font-weight:400;font-size:10px;margin-left:6px">'+ago2(rec.ts_full||"")+'</span></div>'
+    +'<div class="hist-fields">'
+    +'<div class="hist-field">위도 <span>'+fmtLatPlain(rec.lat)+'</span></div>'
+    +'<div class="hist-field">경도 <span>'+fmtLonPlain(rec.lon)+'</span></div>'
+    +'<div class="hist-field">위치상태 <span>'+offStr+'</span></div>'
+    +'<div class="hist-field">측위 <span>'+((rec.epfd!=null?(rec.epfd+'('+(rec.epfd_name||EPFD_T[rec.epfd]||"?")+')'):"-"))+'</span></div>'
+    +'<div class="hist-field">UTC <span>'+utcLabel(rec.utc_sec)+'</span></div>'
+    +'<div class="hist-field">AtoN상태 <span style="color:'+(hasWarn?"var(--red)":"var(--green)")+'">'+hexStatus+(hasWarn?" ⚠":"")+'</span></div>'
+    +'<div class="hist-field">RAIM <span>'+(rec.raim?"사용":"미사용")+'</span></div>'
+    +'</div>'
+    +'<div class="hist-toggle" onclick="toggleRaw('+idx+')">📡 NMEA 원문 펼치기 ▼</div>'
+    +'<div id="hist-raw-'+idx+'" style="display:none;margin-top:5px;font-size:10px;font-family:monospace;color:var(--text);word-break:break-all;padding:6px;background:rgba(0,0,0,.3);border-radius:6px;border-left:2px solid var(--amber)">'+rawHtml
+    +'<div style="margin-top:4px;font-size:9px;color:var(--dim)">📋 <span onclick="copyRaw('+idx+')" style="cursor:pointer;color:var(--violet)">원문 복사</span></div></div>'
+    +'</div>';
+}
+function toggleRaw(idx){var el=document.getElementById("hist-raw-"+idx);var t=document.querySelector("#hist-"+idx+" .hist-toggle");if(!el)return;var open=el.style.display==="none";el.style.display=open?"block":"none";t.textContent=open?"📡 NMEA 원문 접기 ▲":"📡 NMEA 원문 펼치기 ▼";}
+function copyRaw(idx){var el=document.getElementById("hist-raw-"+idx);if(!el)return;var text=el.innerText.replace("📋 원문 복사","").trim();navigator.clipboard&&navigator.clipboard.writeText(text).then(function(){var s=el.querySelector("span[onclick]");if(s){s.textContent="✓ 복사됨";setTimeout(function(){s.textContent="원문 복사";},2000);}});}
+async function showHistorySection(mmsi){var el=document.getElementById("hist-section");if(!el)return;el.innerHTML='<div style="padding:16px;text-align:center;color:var(--dim)">불러오는 중...</div>';var hist=await loadHistory(mmsi);if(!hist.length){el.innerHTML='<div style="padding:16px;text-align:center;color:var(--dim)">수신 기록 없음</div>';return;}el.innerHTML=hist.slice(0,50).map(function(r,i){return renderHistoryItem(r,i);}).join("");}
+
+// ── MSG6/8 ────────────────────────────────────────────────────────
+async function loadMsg6(mmsi){try{var r=await fetch(SERVER+'/msg6/'+mmsi+'.json',{signal:AbortSignal.timeout(4000)});var d=await r.json();return d.records||[];}catch{return[];}}
+async function loadMsg8(mmsi){try{var r=await fetch(SERVER+'/msg8/'+mmsi+'.json',{signal:AbortSignal.timeout(4000)});var d=await r.json();return d.records||[];}catch{return[];}}
+
+function renderMsg6Card(rec,idx){
+  var fi_label=rec.fi===55?"Function Code = FI-55 회전식 등명기":"Function Code = FI-51 점멸식 등명기";
+  var RACON_S=["미설치","정상","이상","예비"];
+  var DL_S=["미설치","켜짐","꺼짐","오류"];
+  function pill(label,ok,okTxt,errTxt,skip){
+    if(skip)return'<div class="status-pill pill-off">⬜ '+label+' 미설치</div>';
+    return'<div class="status-pill '+(ok?'pill-ok':'pill-err')+'">'+(ok?'✅':'⚠')+' '+label+': '+(ok?okTxt:errTxt)+'</div>';
+  }
+  var pills=pill("💡 등명기",rec.lantern===1,"켜짐","꺼짐",false)
+    +pill("📡 레이콘",rec.racon===1,"정상",RACON_S[rec.racon]||"-",rec.racon===0)
+    +pill("🔋 배터리",rec.battery===0,"정상","이상",false)
+    +pill("⚡ 충전기",rec.charger===0,"정상","이상",false)
+    +pill("☀️ 태양광",rec.solar===0,"정상","이상",false)
+    +pill("💾 로거",rec.data_logger===1,"정상",DL_S[rec.data_logger]||"-",rec.data_logger===0);
+  function sv(v,unit){if(v==null)return'<span style="color:var(--dim)">미제공</span>';return'<span>'+v.toFixed(2)+'</span><span style="color:var(--dim);font-size:10px"> '+unit+'</span>';}
+  function si(label,val){return'<div class="sensor-item"><div class="sensor-label">'+label+'</div><div class="sensor-val">'+val+'</div></div>';}
+  var sensors=si("주전원 전압 (Main Power V)",sv(rec.main_v,"V"))+si("태양광 전압 (Solar V)",sv(rec.solar_v,"V"))
+    +si("배터리 전압 (Battery V)",sv(rec.batt_v,"V"))+si("AIS 전류 (AIS I)",sv(rec.ais_i,"A"))
+    +si("등명기 전류 (Lantern I)",sv(rec.lantern_i,"A"))+si("로거 전류 (DL I)",sv(rec.dl_i,"A"))
+    +si("충전전류+ (Chg I+)",sv(rec.chg_pos,"A"))+si("충전전류- (Chg I-)",sv(rec.chg_neg,"A"));
+  var rawHtml=rec.raw?rec.raw:'(NMEA 없음)';
+  return'<div class="msg6-card">'
+    +'<div class="msg6-hdr"><div class="msg6-ts">'+(rec.ts_full||rec.ts)+' <span style="color:var(--dim);font-size:9px">'+ago2(rec.ts_full||"")+'</span></div></div>'
+    +'<div style="font-size:10px;color:var(--dim);margin-bottom:3px">📡 장비시각: '+(rec.device_dt||"-")+' | 위치: '+(rec.lat!=null?rec.lat.toFixed(4)+"°N "+rec.lon.toFixed(4)+"°E":"미제공")+'</div>'
+    +'<div class="msg6-fi" style="margin-bottom:6px">'+fi_label+'</div>'
+    +'<div class="status-row">'+pills+'</div>'
+    +'<div class="sensor-grid">'+sensors+'</div>'
+    +'<div class="hist-toggle" onclick="toggleRaw6('+idx+')" style="margin-top:6px">📡 NMEA 원문 펼치기 ▼</div>'
+    +'<div id="msg6-raw-'+idx+'" style="display:none;margin-top:5px;font-size:10px;font-family:monospace;color:var(--text);word-break:break-all;padding:6px;background:rgba(0,0,0,.3);border-radius:6px;border-left:2px solid var(--amber)">'+rawHtml+'</div>'
+    +'</div>';
+}
+function toggleRaw6(idx){var el=document.getElementById("msg6-raw-"+idx);if(!el)return;el.style.display=el.style.display==="none"?"block":"none";}
+
+function renderMsg8Card(rec){
+  var PRECIP_S=["예비","비(Rain)","뇌우","동결비","혼합/얼음","눈(Snow)","예비","미제공"];
+  var SEA_B=["0-잔잔","1-매우잔잔","2-잔잔","3-약간파도","4-보통파도","5-높은파도","6-매우높음","7-폭풍전","8-강풍","9-폭풍","10-강폭풍","11-맹렬폭풍","12-태풍"];
+  function wv(v,unit){if(v==null)return'<span style="color:var(--dim)">미제공</span>';return'<span>'+v+'</span><span class="wx-unit"> '+unit+'</span>';}
+  function wi(k,v){return'<div class="wx-item"><div class="wx-k">'+k+'</div><div class="wx-v">'+v+'</div></div>';}
+  var h='<div class="msg6-card">'
+    +'<div class="msg6-hdr"><div class="msg6-ts">'+(rec.ts_full||rec.ts)+' <span style="color:var(--dim);font-size:9px">'+ago2(rec.ts_full||"")+'</span></div>'
+    +'<div class="msg6-fi" style="background:rgba(155,109,255,.15);color:var(--violet)">FI-'+rec.fi+' 해양기상</div></div>'
+    +'<div style="font-size:10px;color:var(--dim);margin-bottom:8px">📍 '+(rec.lat!=null?rec.lat+"°N "+rec.lon+"°E":"위치미제공")+' | ⏱ UTC '+(rec.utc||"-")+'</div>'
+    +'<div class="wx-title">🌬 바람 (Wind)</div><div class="wx-grid" style="margin-bottom:8px">'
+    +wi("평균풍속 (Avg Wind Speed)",wv(rec.wind_speed,"kn"))+wi("최대순간풍속 (Gust)",wv(rec.wind_gust,"kn"))
+    +wi("풍향 (Wind Dir)",wv(rec.wind_dir,"°"))+wi("최대풍향 (Gust Dir)",wv(rec.wind_gust_dir,"°"))+'</div>'
+    +'<div class="wx-title">🌡 기상 (Meteorological)</div><div class="wx-grid" style="margin-bottom:8px">'
+    +wi("기온 (Air Temp)",wv(rec.air_temp,"°C"))+wi("상대습도 (Humidity)",wv(rec.humidity,"%"))
+    +wi("이슬점 (Dew Point)",wv(rec.dew_point,"°C"))+wi("기압 (Pressure)",wv(rec.pressure,"hPa"))
+    +wi("기압변화 (Tendency)",rec.pressure_tendency||"미제공")+wi("수평시정 (Visibility)",wv(rec.visibility,"NM"))+'</div>'
+    +'<div class="wx-title">🌊 파도 (Wave)</div><div class="wx-grid" style="margin-bottom:8px">'
+    +wi("유효파고 (Wave Height)",wv(rec.wave_height,"m"))+wi("파주기 (Wave Period)",wv(rec.wave_period,"s"))
+    +wi("파향 (Wave Dir)",wv(rec.wave_dir,"°"))+wi("너울고 (Swell Height)",wv(rec.swell_height,"m"))
+    +wi("너울주기 (Swell Period)",wv(rec.swell_period,"s"))+wi("너울방향 (Swell Dir)",wv(rec.swell_dir,"°"))
+    +wi("해상상태 (Sea State)",rec.sea_state!=null?(SEA_B[rec.sea_state]||rec.sea_state):"미제공")+'</div>'
+    +'<div class="wx-title">🌊 해양 (Oceanographic)</div><div class="wx-grid" style="margin-bottom:8px">'
+    +wi("조위 (Water Level)",wv(rec.water_level,"m"))+wi("조위변화 (Trend)",rec.water_level_trend||"미제공")
+    +wi("표층유속 (Current Spd)",wv(rec.current_speed,"kn"))+wi("표층유향 (Current Dir)",wv(rec.current_dir,"°"))
+    +wi("수온 (Water Temp)",wv(rec.water_temp,"°C"))+wi("염분 (Salinity)",wv(rec.salinity,"‰"))
+    +wi("강수 (Precipitation)",rec.precipitation!=null?(PRECIP_S[rec.precipitation]||"-"):"미제공")
+    +wi("결빙 (Ice)",rec.ice||"미제공")+'</div></div>';
+  return h;
+}
+
+async function showMsg6Tab(mmsi){var el=document.getElementById("msg6-pane");if(!el)return;el.innerHTML='<div class="no-data">불러오는 중...</div>';var recs=await loadMsg6(mmsi);if(!recs.length){el.innerHTML='<div class="no-data">📭 MSG6 수신 기록 없음<br><small style="color:var(--dim)">FI-51/55가 아직 수신되지 않았습니다</small></div>';return;}el.innerHTML=recs.map(function(r,i){return renderMsg6Card(r,i);}).join("");}
+async function showMsg8Tab(mmsi){var el=document.getElementById("msg8-pane");if(!el)return;el.innerHTML='<div class="no-data">불러오는 중...</div>';var recs=await loadMsg8(mmsi);if(!recs.length){el.innerHTML='<div class="no-data">📭 MSG8 수신 기록 없음<br><small style="color:var(--dim)">FI-11/31이 아직 수신되지 않았습니다</small></div>';return;}el.innerHTML=recs.map(function(r){return renderMsg8Card(r);}).join("");}
+function switchDetTab(tab,mmsi){document.querySelectorAll(".det-tab").forEach(function(b){b.classList.remove("active");});document.querySelectorAll(".det-tab-pane").forEach(function(p){p.classList.remove("active");});var t=document.getElementById("det-tab-"+tab);if(t)t.classList.add("active");var p=document.getElementById("det-pane-"+tab);if(p)p.classList.add("active");if(tab==="msg6")showMsg6Tab(mmsi);else if(tab==="msg8")showMsg8Tab(mmsi);}
+
+// ── 지도 ──────────────────────────────────────────────────────────
+var map=L.map('map',{zoomControl:false,attributionControl:true}).setView([36.08,129.57],13);
+var LAYERS={
+  osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}),
+  satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'© Esri'}),
+  topo:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'© OpenTopoMap'}),
+};
+LAYERS.osm.addTo(map);
+var myLocMarker=null, myLocAcc=null;
+function showMyLocation(){
+  if(!navigator.geolocation){alert("이 기기에서 위치 기능을 사용할 수 없습니다.");return;}
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var la=pos.coords.latitude, lo=pos.coords.longitude, ac=pos.coords.accuracy||0;
+    myLat=la; myLon=lo; mySpeed=pos.coords.speed; myHeading=pos.coords.heading;
+    if(myLocMarker){map.removeLayer(myLocMarker);} if(myLocAcc){map.removeLayer(myLocAcc);}
+    if(ac>0){myLocAcc=L.circle([la,lo],{radius:ac,color:"#1e88e5",fillColor:"#42a5f5",fillOpacity:.12,weight:1}).addTo(map);}
+    myLocMarker=L.circleMarker([la,lo],{radius:8,color:"#fff",fillColor:"#1e88e5",fillOpacity:1,weight:3}).addTo(map);
+    myLocMarker.bindPopup("📍 내 위치<br>"+la.toFixed(5)+", "+lo.toFixed(5)).openPopup();
+    map.setView([la,lo],15);
+  },function(err){alert("위치를 가져올 수 없습니다.\n권한을 허용했는지 확인하세요.\n("+err.message+")");},
+  {enableHighAccuracy:true,timeout:10000,maximumAge:5000});
+}
+
+/* ===== 선박 접근 경보 ===== */
+var myLat=null, myLon=null, mySpeed=null, myHeading=null;
+var alertCfg={on:false,radiusM:1000,dirMode:'all',bearing:0,halfWidth:45,needApproach:true,sound:true,useCpa:true,cpaLimitM:300,tcpaLimitMin:10};
+var _alertState={}, _audioCtx=null, _alertWatchId=null, _alertCircle=null, _alertWedge=null;
+function _toRad(d){return d*Math.PI/180;}
+function _distM(la1,lo1,la2,lo2){var R=6371000,dLa=_toRad(la2-la1),dLo=_toRad(lo2-lo1);var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(_toRad(la1))*Math.cos(_toRad(la2))*Math.sin(dLo/2)*Math.sin(dLo/2);return 2*R*Math.asin(Math.min(1,Math.sqrt(a)));}
+function _bearing(la1,lo1,la2,lo2){var y=Math.sin(_toRad(lo2-lo1))*Math.cos(_toRad(la2));var x=Math.cos(_toRad(la1))*Math.sin(_toRad(la2))-Math.sin(_toRad(la1))*Math.cos(_toRad(la2))*Math.cos(_toRad(lo2-lo1));return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+function _angDiff(a,b){var d=Math.abs(a-b)%360;return d>180?360-d:d;}
+function _unlockAudio(){try{if(!_audioCtx)_audioCtx=new (window.AudioContext||window.webkitAudioContext)();if(_audioCtx.state==='suspended')_audioCtx.resume();}catch(e){}}
+function _beep(){if(!alertCfg.sound)return;try{if(!_audioCtx)_audioCtx=new (window.AudioContext||window.webkitAudioContext)();var c=_audioCtx;if(c.state==='suspended')c.resume();function tone(fr,t0,dur){var o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=fr;o.connect(g);g.connect(c.destination);var t=c.currentTime+t0;g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.35,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.start(t);o.stop(t+dur+0.02);}tone(880,0,0.25);tone(880,0.32,0.25);}catch(e){}}
+function openAlertCfg(){document.getElementById('alert-cfg').style.display='block';_unlockAudio();acApply();}
+function closeAlertCfg(){document.getElementById('alert-cfg').style.display='none';}
+function _startLocWatch(){if(!navigator.geolocation)return;if(myLat==null){showMyLocation();}if(_alertWatchId!=null)return;try{_alertWatchId=navigator.geolocation.watchPosition(function(p){myLat=p.coords.latitude;myLon=p.coords.longitude;mySpeed=p.coords.speed;myHeading=p.coords.heading;},function(){},{enableHighAccuracy:true,maximumAge:5000,timeout:15000});}catch(e){}}
+function _stopLocWatch(){if(_alertWatchId!=null){try{navigator.geolocation.clearWatch(_alertWatchId);}catch(e){}_alertWatchId=null;}}
+function acApply(){
+  var g=function(id){return document.getElementById(id);};
+  alertCfg.on=g('ac-on').checked;
+  alertCfg.radiusM=parseInt(g('ac-rad').value,10)||1000;
+  g('ac-radlabel').textContent=alertCfg.radiusM+' m';
+  alertCfg.dirMode=g('ac-dir').value;
+  g('ac-sector').style.display=(alertCfg.dirMode==='sector')?'block':'none';
+  alertCfg.bearing=(((parseInt(g('ac-brg').value,10)||0)%360)+360)%360;
+  alertCfg.halfWidth=Math.max(5,Math.min(180,parseInt(g('ac-half').value,10)||45));
+  alertCfg.needApproach=g('ac-appr').checked;
+  alertCfg.useCpa=g('ac-cpa').checked;
+  alertCfg.cpaLimitM=Math.max(50,parseInt(g('ac-cpalim').value,10)||300);
+  alertCfg.tcpaLimitMin=Math.max(1,parseInt(g('ac-tcpalim').value,10)||10);
+  g('ac-cpafields').style.display=alertCfg.useCpa?'block':'none';
+  g('ac-appr-wrap').style.display=alertCfg.useCpa?'none':'flex';
+  alertCfg.sound=g('ac-snd').checked;
+  if(alertCfg.on){_unlockAudio();_startLocWatch();}
+  else{_stopLocWatch();var b=document.getElementById('alert-banner');if(b)b.style.display='none';}
+  try{_drawAlertRange();}catch(e){}
+  try{evalAlerts();}catch(e){}
+}
+function _destPoint(la,lo,brg,dist){var R=6371000,d=dist/R,b=_toRad(brg),l1=_toRad(la),o1=_toRad(lo);var l2=Math.asin(Math.sin(l1)*Math.cos(d)+Math.cos(l1)*Math.sin(d)*Math.cos(b));var o2=o1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(l1),Math.cos(d)-Math.sin(l1)*Math.sin(l2));return [l2*180/Math.PI,o2*180/Math.PI];}
+function _drawAlertRange(){
+  if(!alertCfg.on||myLat==null){if(_alertCircle){map.removeLayer(_alertCircle);_alertCircle=null;}if(_alertWedge){map.removeLayer(_alertWedge);_alertWedge=null;}return;}
+  if(!_alertCircle){_alertCircle=L.circle([myLat,myLon],{radius:alertCfg.radiusM,color:'#c62828',weight:1,fillColor:'#c62828',fillOpacity:0.06,interactive:false}).addTo(map);}
+  else{_alertCircle.setLatLng([myLat,myLon]);_alertCircle.setRadius(alertCfg.radiusM);}
+  if(_alertWedge){map.removeLayer(_alertWedge);_alertWedge=null;}
+  if(alertCfg.dirMode==='sector'){
+    var pts=[[myLat,myLon]];
+    for(var a=-alertCfg.halfWidth;a<=alertCfg.halfWidth;a+=5){pts.push(_destPoint(myLat,myLon,alertCfg.bearing+a,alertCfg.radiusM));}
+    _alertWedge=L.polygon(pts,{color:'#c62828',weight:1,fillColor:'#c62828',fillOpacity:0.12,interactive:false}).addTo(map);
+  }
+}
+function _cpaTcpa(v){
+  var mLat=111320, mLon=111320*Math.cos(_toRad(myLat));
+  var rE=(v.lon-myLon)*mLon, rN=(v.lat-myLat)*mLat;
+  var vs=(v.sog!=null&&v.sog<102.3)?v.sog*0.514444:0;
+  var vc=(v.cog!=null&&v.cog<360)?_toRad(v.cog):0;
+  var vE=vs*Math.sin(vc), vN=vs*Math.cos(vc);
+  var mE=0,mN=0;
+  if(mySpeed!=null&&mySpeed>0.5&&myHeading!=null&&!isNaN(myHeading)){var hc=_toRad(myHeading);mE=mySpeed*Math.sin(hc);mN=mySpeed*Math.cos(hc);}
+  var relE=vE-mE, relN=vN-mN, v2=relE*relE+relN*relN, dist=Math.sqrt(rE*rE+rN*rN);
+  if(v2<1e-6)return{cpa:dist,tcpa:null};
+  var tcpa=-(rE*relE+rN*relN)/v2;
+  if(tcpa<0)return{cpa:dist,tcpa:tcpa};
+  var cx=rE+relE*tcpa, cy=rN+relN*tcpa;
+  return{cpa:Math.sqrt(cx*cx+cy*cy),tcpa:tcpa};
+}
+function _fmtTcpa(sec){sec=Math.round(sec);var m=Math.floor(sec/60),s=sec%60;return m>0?(m+'\uBD84'+(s<10?'0':'')+s+'\uCD08'):(s+'\uCD08');}
+function evalAlerts(){
+  try{_drawAlertRange();}catch(e){}
+  var banner=document.getElementById('alert-banner');
+  if(!alertCfg.on||myLat==null){if(banner)banner.style.display='none';return;}
+  var now=Date.now(),hits=[];
+  Object.keys(vessels).forEach(function(k){
+    var v=vessels[k]; if(v.lat==null||v.lon==null)return;
+    var d=_distM(myLat,myLon,v.lat,v.lon); var st=_alertState[k]||{};
+    if(d>alertCfg.radiusM){st.lastDist=d;_alertState[k]=st;return;}
+    if(alertCfg.dirMode==='sector'){
+      var brgToV=_bearing(myLat,myLon,v.lat,v.lon);
+      if(_angDiff(brgToV,alertCfg.bearing)>alertCfg.halfWidth){st.lastDist=d;_alertState[k]=st;return;}
+    }
+    var ct=_cpaTcpa(v);
+    var threat;
+    if(alertCfg.useCpa){
+      threat=(d<=alertCfg.cpaLimitM)||(ct.tcpa!=null&&ct.tcpa>=0&&ct.tcpa<=alertCfg.tcpaLimitMin*60&&ct.cpa<=alertCfg.cpaLimitM);
+    } else if(alertCfg.needApproach){
+      var closing;
+      if(v.cog!=null&&v.cog<360){closing=_angDiff(_bearing(v.lat,v.lon,myLat,myLon),v.cog)<=50;}
+      else{closing=(st.lastDist!=null&&d<st.lastDist-3);}
+      threat=closing;
+    } else { threat=true; }
+    if(!threat){st.lastDist=d;_alertState[k]=st;return;}
+    hits.push({v:v,d:d,cpa:ct.cpa,tcpa:ct.tcpa});
+    if(!st.alertedAt||(now-st.alertedAt)>30000){_beep();try{if(navigator.vibrate)navigator.vibrate(400);}catch(e){}st.alertedAt=now;}
+    st.lastDist=d;_alertState[k]=st;
+  });
+  if(banner){
+    if(hits.length){
+      hits.sort(function(a,b){return a.d-b.d;});
+      var top=hits[0],nm=top.v.name||('MMSI '+top.v.mmsi);
+      var extra='';
+      if(top.cpa!=null){extra+=' \u00B7 CPA '+Math.round(top.cpa)+'m';}
+      if(top.tcpa!=null&&top.tcpa>=0){extra+=' \u00B7 TCPA '+_fmtTcpa(top.tcpa);}
+      banner.innerHTML='\u26A0 \uC120\uBC15 \uC811\uADFC \uC911 \uC8FC\uC758\uD558\uC138\uC694<br><span style="font-weight:400;font-size:12px">'+nm+' \u00B7 '+Math.round(top.d)+' m'+extra+(hits.length>1?(' \uC678 '+(hits.length-1)+'\uCC99'):'')+'</span>';
+      banner.style.display='block';
+    } else { banner.style.display='none'; }
+  }
+}
+
+function switchLayer(n,btn){document.querySelectorAll(".lbtn").forEach(function(b){b.classList.remove("active");});btn.classList.add("active");Object.values(LAYERS).forEach(function(l){if(map.hasLayer(l))map.removeLayer(l);});LAYERS[n].addTo(map);}
+// ── 거리측정 ──
+var measureOn=false, measurePts=[], measureLine=null, measureDots=[];
+function _clearMeasure(){measurePts=[];if(measureLine){map.removeLayer(measureLine);measureLine=null;}measureDots.forEach(function(d){map.removeLayer(d);});measureDots=[];}
+function toggleMeasure(btn){
+  measureOn=!measureOn; if(btn)btn.classList.toggle("active",measureOn);
+  var ro=document.getElementById("measure-readout");
+  _clearMeasure();
+  if(measureOn){ ro.style.display="block"; ro.innerHTML="📏 지도를 눌러 지점을 찍으세요"; try{map.getContainer().style.cursor="crosshair";}catch(e){} }
+  else { ro.style.display="none"; try{map.getContainer().style.cursor="";}catch(e){} }
+}
+function _measureClick(ll){
+  measurePts.push(ll);
+  measureDots.push(L.circleMarker(ll,{radius:4,color:"#c62828",weight:2,fillColor:"#fff",fillOpacity:1,interactive:false}).addTo(map));
+  if(measureLine)measureLine.setLatLngs(measurePts); else measureLine=L.polyline(measurePts,{color:"#c62828",weight:2,dashArray:"6,4",interactive:false}).addTo(map);
+  var total=0; for(var i=1;i<measurePts.length;i++){total+=_distM(measurePts[i-1].lat,measurePts[i-1].lng,measurePts[i].lat,measurePts[i].lng);}
+  var ro=document.getElementById("measure-readout");
+  if(measurePts.length<2){ ro.innerHTML="📏 시작점 지정됨 — 다음 지점을 누르세요"; }
+  else{ ro.innerHTML="📏 총 거리 <b>"+Math.round(total).toLocaleString()+" m</b> ("+(measurePts.length-1)+"구간)  <span style=\"cursor:pointer;text-decoration:underline\" onclick=\"_clearMeasure();document.getElementById(&#39;measure-readout&#39;).innerHTML=&#39;📏 지도를 눌러 지점을 찍으세요&#39;\">지우기</span>"; }
+}
+map.on("click",function(e){ if(measureOn) _measureClick(e.latlng); });
+
+// ── 아이콘 ────────────────────────────────────────────────────────
+function shipIcon(cog,color,big){var sz=big?24:17;return L.divIcon({html:'<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 20 20"><polygon points="10,1 17,19 10,15 3,19" fill="'+color+'" stroke="#ffffff" stroke-width="2" transform="rotate('+(cog||0)+',10,10)"/></svg>',className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});}
+function atonIcon(virt,off,big){var sz=big?22:15;var col=off?"#ff4455":virt?"#9b6dff":"#f0a500";var dash=virt?"stroke-dasharray='5,3'":"";return L.divIcon({html:'<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 20 20"><polygon points="10,1 19,10 10,19 1,10" fill="'+col+'44" stroke="'+col+'" stroke-width="2" '+dash+'/><circle cx="10" cy="10" r="2.5" fill="'+col+'"/></svg>',className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});}
+
+// ── 상태 ──────────────────────────────────────────────────────────
+var vessels={},atons={},nmea=[],sel=null,filt="all",panelOpen=false,activeTab="list";
+var vectors={};
+var markers={},SERVER="http://localhost:8100",firstCenter=false,pollTimer=null;
+window._d={};
+
+// ── 필터 ──────────────────────────────────────────────────────────
+function getFiltered(){return[].concat(Object.values(vessels),Object.values(atons)).filter(function(a){if(filt==="vessel")return a.msg_type!==21;if(filt==="physical")return a.msg_type===21&&!a.virtual;if(filt==="virtual")return a.msg_type===21&&(a.virtual===true||a.virtual==="true");if(filt==="stale")return(Date.now()/1000-a.last_seen)>600;return true;}).sort(function(a,b){return b.last_seen-a.last_seen;});}
+function updateFilterCounts(){
+  try{ var _nc=document.getElementById('nmea-count'); if(_nc&&nmea){ var _nf=nmea.filter(function(e){var tag=e.tag||'';var mt=e.mt||0;if(filt==="vessel")return[1,2,3,5,18,24].includes(mt);if(filt==="physical")return tag==="aton_physical"||tag==="msg6"||mt===21||mt===6||mt===8;if(filt==="virtual")return tag==="aton_virtual"||mt===21;return true;}).length; _nc.textContent='('+_nf+')'; }}catch(e){}
+  var all=[].concat(Object.values(vessels),Object.values(atons));
+  var nv=all.filter(function(a){return a.msg_type!==21;}).length;
+  var np=all.filter(function(a){return a.msg_type===21&&a.virtual!==true&&a.virtual!=="true";}).length;
+  var na=all.filter(function(a){return a.msg_type===21&&(a.virtual===true||a.virtual==="true");}).length;
+  var set=function(id,n){var e=document.getElementById(id); if(e)e.textContent='('+n+')';};
+  set('fc-all',all.length); set('fc-vessel',nv); set('fc-physical',np); set('fc-virtual',na);
+}
+function setF(f,btn){filt=f;document.querySelectorAll(".fb").forEach(function(b){b.classList.remove("active");});btn.classList.add("active");updateMarkers();renderList();renderNmea();}
+
+// ── 팝업 ──────────────────────────────────────────────────────────
+function puHTML(a){
+  var isA=a.msg_type===21,fr=stale(a.last_seen);
+  var _nm=(a.name&&String(a.name).trim())?String(a.name).trim():"";
+  var _emoji=(isA?(a.virtual?"🔵":"🔦"):"🚢");
+  return'<div class="pu-name">'+_emoji+" "+(_nm||("MMSI "+a.mmsi))+'</div>'
+    +'<div class="pu-mmsi">'+(_nm?("MMSI "+a.mmsi):(isA?"":"🕐 선박정보 수신 대기"))+'</div>'
+    +(isA?'<div class="pu-row"><span class="pl">종류</span><span class="pv">'+(a.virtual?"가상표지":"물리표지")+'</span></div>'
+        +'<div class="pu-row"><span class="pl">유형</span><span class="pv">Type '+a.aton_type+' '+aname_en(a.aton_type)+'('+(a.aton_name_ko||aname(a.aton_type))+')</span></div>'
+        +(a.off_position?'<div style="color:var(--red);font-size:11px;margin-top:4px">⚠ 위치이탈</div>':"")
+      :'<div class="pu-row"><span class="pl">속도/침로</span><span class="pv">'+(a.sog||0)+"kn / "+(a.cog||0)+'°</span></div>'
+        +'<div class="pu-row"><span class="pl">항법상태</span><span class="pv">'+(NAV_S[a.nav_status]||"-")+'</span></div>'
+        +(a.destination?'<div class="pu-row"><span class="pl">목적지</span><span class="pv">'+a.destination+'</span></div>':""))
+    +'<div class="pu-row"><span class="pl">수신</span><span class="pv" style="color:'+fr+'">'+ago(a.last_seen)+'</span></div>'
+    +'<button class="pu-btn" onclick="openDetail(\''+a.mmsi+'\');map.closePopup()">상세정보 보기 ›</button>';
+}
+
+// ── 마커 ──────────────────────────────────────────────────────────
+function updateMarkers(){
+  var filtered=getFiltered();
+  var keep={};filtered.forEach(function(a){keep[a.mmsi]=true;});
+  Object.keys(markers).forEach(function(k){if(!keep[k]){map.removeLayer(markers[k]);delete markers[k];}});
+  filtered.forEach(function(a){
+    if(!a.lat||!a.lon||a.lat===0&&a.lon===0)return;
+    var isA=a.msg_type===21,isSel=sel&&sel.mmsi===a.mmsi,fr=stale(a.last_seen);
+    var icon=isA?atonIcon(a.virtual,a.off_position,isSel):shipIcon(a.cog||0,isSel?"#fff":fr,isSel);
+    if(markers[a.mmsi]){markers[a.mmsi].setIcon(icon);markers[a.mmsi].setLatLng([a.lat,a.lon]);markers[a.mmsi].getPopup()&&markers[a.mmsi].setPopupContent(puHTML(a));}
+    else{var mk=L.marker([a.lat,a.lon],{icon:icon,zIndexOffset:isA?0:100}).addTo(map).bindPopup(puHTML(a),{maxWidth:200});mk.on("click",function(){sel=a;updateMarkers();});markers[a.mmsi]=mk;}
+  });
+  Object.keys(vectors).forEach(function(k){ if(!keep[k]){ map.removeLayer(vectors[k]); delete vectors[k]; } });
+  filtered.forEach(function(a){
+    if(a.msg_type===21){ if(vectors[a.mmsi]){map.removeLayer(vectors[a.mmsi]);delete vectors[a.mmsi];} return; }
+    if(!a.lat||!a.lon) return;
+    var sog=(a.sog!=null&&a.sog<102.3)?a.sog:0, cog=(a.cog!=null&&a.cog<360)?a.cog:null;
+    if(sog>0.5&&cog!=null){
+      var lenM=Math.min(sog*0.514444*90, 500), end=_destPoint(a.lat,a.lon,cog,lenM), col=stale(a.last_seen);
+      if(vectors[a.mmsi]){ vectors[a.mmsi].setLatLngs([[a.lat,a.lon],end]); vectors[a.mmsi].setStyle({color:col}); }
+      else{ vectors[a.mmsi]=L.polyline([[a.lat,a.lon],end],{color:col,weight:2,opacity:0.85,interactive:false}).addTo(map); }
+    } else if(vectors[a.mmsi]){ map.removeLayer(vectors[a.mmsi]); delete vectors[a.mmsi]; }
+  });
+}
+
+// ── 패널 ──────────────────────────────────────────────────────────
+function togglePanel(){panelOpen=!panelOpen;document.getElementById("bottom-panel").className=panelOpen?"expanded":"collapsed";}
+function showTab(t,btn){activeTab=t;document.querySelectorAll(".tab").forEach(function(b){b.classList.remove("active");});btn.classList.add("active");document.getElementById("list-body").style.display=t==="list"?"block":"none";document.getElementById("nmea-body").style.display=t==="nmea"?"block":"none";if(t==="nmea")renderNmea();if(t==="list")renderList();}
+function showView(v,btn){
+  activeTab=(v==='nmea')?'nmea':'list';
+  var nav=document.getElementById('topnav'); if(nav){nav.querySelectorAll('button').forEach(function(b){b.classList.remove('active');});}
+  if(btn)btn.classList.add('active');
+  var mapView=(v==='map');
+  var lbn=document.querySelector('.layer-btn'); if(lbn)lbn.style.display=mapView?'flex':'none';
+  var lbnL=document.querySelector('.layer-btn-left'); if(lbnL)lbnL.style.display=mapView?'flex':'none';
+  var cc=document.querySelector('.leaflet-control-container'); if(cc)cc.style.display=mapView?'':'none';
+  if(!mapView){var mr=document.getElementById('measure-readout'); if(mr)mr.style.display='none';}
+  var panel=document.getElementById('data-panel'), lb=document.getElementById('list-body'), nb=document.getElementById('nmea-body'), gb=document.getElementById('guide-body');
+  var pt=document.getElementById('panelTitle'); if(pt)pt.textContent=(v==='nmea')?'수신 로그':'목록';
+  var _frr=document.getElementById('filter-row');
+  var _ap=document.getElementById('analysis-panel'); if(_ap&&v!=='analysis')_ap.style.display='none';
+  var _cp=document.getElementById('config-panel'); if(_cp&&v!=='config')_cp.style.display='none';
+  if(v!=='analysis')stopLiveRf();
+  if(v!=='config')stopCfComm();
+  if(v==='map'){ panel.style.display='none'; if(_frr)_frr.style.display=''; }
+  else if(v==='nmea'){
+    panel.style.display='flex'; lb.style.display='none'; nb.style.display='block';
+    if(gb)gb.style.display='none';
+    if(_frr)_frr.style.display='';
+    var _pt3=document.getElementById('panelTitle'); if(_pt3)_pt3.parentElement.style.display='none';
+    var _rtb=document.getElementById('raw-toggle-btn'); if(_rtb)_rtb.style.display='inline-block';
+    rawView=false; if(_rtb)_rtb.textContent='원문'; stopRawView();
+    var _rb=document.getElementById('raw-body'); if(_rb)_rb.style.display='none';
+    refreshNmea();
+  }
+  else if(v==='analysis'){
+    panel.style.display='flex';               // 부모(data-panel) 오버레이를 켜서 지도 위를 덮는다
+    lb.style.display='none'; nb.style.display='none';
+    if(gb)gb.style.display='none';
+    var _pt4=document.getElementById('panelTitle'); if(_pt4)_pt4.parentElement.style.display='none';
+    if(_frr)_frr.style.display='none';
+    var _ap2=document.getElementById('analysis-panel'); if(_ap2)_ap2.style.display='flex';
+    loadRef();
+    startLiveRf();
+  }
+  else if(v==='config'){
+    panel.style.display='flex';
+    lb.style.display='none'; nb.style.display='none';
+    if(gb)gb.style.display='none';
+    var _pt5=document.getElementById('panelTitle'); if(_pt5)_pt5.parentElement.style.display='none';
+    if(_frr)_frr.style.display='none';
+    var _cp2=document.getElementById('config-panel'); if(_cp2)_cp2.style.display='flex';
+    renderConfigTab();
+    startCfComm();
+  }
+  else if(v==='guide'){
+    panel.style.display='flex';
+    lb.style.display='none'; nb.style.display='none';
+    if(gb){ gb.style.display='block'; }
+    var _pt=document.getElementById('panelTitle'); if(_pt)_pt.parentElement.style.display='none';
+    if(_frr)_frr.style.display='none';
+    if(gb&&!gb._filled){
+      gb._filled=true;
+      gb.style.cssText='flex:1;display:block;overflow:hidden;padding:0;background:#07101f';
+      var _ifr=document.createElement('iframe');
+      _ifr.id='guideFrame';
+      _ifr.title='AtoN AIS 사용 매뉴얼';
+      _ifr.style.cssText='width:100%;height:100%;border:0;display:block';
+      gb.appendChild(_ifr);
+      _ifr.srcdoc=`<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07101f">
+<title>AtoN AIS 사용 매뉴얼</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+/* ───────── 색상 (앱과 동일 계열) ───────── */
+:root{
+  --bg:#07101f; --card:#0d1f3c; --card2:#112a50; --line:rgba(0,180,216,.22);
+  --txt:#e8f4fd; --mut:#a3b8c8; --cyan:#00b4d8; --cyan2:#00e5ff;
+  --amber:#ffab00; --green:#00c853; --red:#ff5252; --blue:#1565c0; --violet:#b388ff;
+  --on-accent:#001018; --shadow:0 6px 22px rgba(0,0,0,.35);
+}
+[data-theme="light"]{
+  --bg:#f2f6fa; --card:#ffffff; --card2:#e9f1f8; --line:rgba(0,90,130,.2);
+  --txt:#0b1d33; --mut:#4c6277; --cyan:#007c99; --cyan2:#006f8a;
+  --amber:#a86a00; --green:#087f3b; --red:#c62828; --blue:#1565c0; --violet:#6a3ad1;
+  --on-accent:#ffffff; --shadow:0 4px 16px rgba(10,40,70,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  background:var(--bg);color:var(--txt);
+  font-family:'Noto Sans KR',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  font-size:15px;line-height:1.65;word-break:keep-all;
+  padding-bottom:env(safe-area-inset-bottom,0);
+}
+a{color:inherit}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+
+/* ───────── 상단 고정 바 ───────── */
+.head{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line);
+  padding-top:env(safe-area-inset-top,0)}
+.head-row{display:flex;align-items:center;gap:10px;height:52px;max-width:760px;margin:0 auto;padding:0 12px}
+.head-ico{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#0288d1,#00b4d8);
+  display:grid;place-items:center;font-size:18px;flex-shrink:0}
+.head-ttl{font-weight:800;font-size:15px;line-height:1.2}
+.head-ttl small{display:block;font-weight:500;font-size:11px;color:var(--mut)}
+.head-sp{flex:1}
+.hbtn{height:36px;min-width:36px;padding:0 10px;border-radius:10px;border:1px solid var(--line);
+  background:var(--card);color:var(--txt);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.hbtn:active{background:var(--card2)}
+.framed .standalone-only{display:none}
+.framed .head-row{display:none}
+.framed .chips{padding-top:10px}
+.framed section{scroll-margin-top:64px}
+.chips .chip.chip-theme{display:none;cursor:pointer;font-family:inherit}
+.framed .chips .chip.chip-theme{display:inline-flex}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:0 12px 10px;max-width:760px;margin:0 auto}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;height:34px;padding:0 13px;border-radius:17px;display:inline-flex;align-items:center;
+  text-decoration:none;font-size:13px;font-weight:700;color:var(--mut);background:var(--card);border:1px solid var(--line)}
+.chip.on{background:var(--cyan);color:var(--on-accent);border-color:var(--cyan)}
+
+/* ───────── 히어로 ───────── */
+.hero{padding:26px 0 8px}
+.hero h1{font-size:26px;line-height:1.3;font-weight:800;letter-spacing:-.3px}
+.hero h1 em{font-style:normal;color:var(--cyan2)}
+.hero p{margin-top:8px;color:var(--mut);font-size:15px}
+.start{display:grid;gap:10px;margin-top:18px}
+.step3{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:14px 14px;box-shadow:var(--shadow)}
+.num{width:30px;height:30px;border-radius:50%;background:var(--cyan);color:var(--on-accent);
+  font-weight:800;display:grid;place-items:center;flex-shrink:0;font-size:15px}
+.step3 b{display:block;font-size:15px}
+.step3 span{font-size:13px;color:var(--mut)}
+.step3 .big{font-size:26px;margin-left:auto;flex-shrink:0}
+
+/* 내부 전용 경고 띠 */
+.gov{display:flex;gap:10px;align-items:flex-start;margin-top:18px;background:rgba(255,82,82,.12);
+  border:1px solid rgba(255,82,82,.45);border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.55}
+.gov .e{font-size:19px;flex-shrink:0;line-height:1.3}
+.gov b{color:var(--red)}
+
+/* ───────── 빠른 이동 타일 ───────── */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:20px}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:78px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;text-decoration:none;
+  font-size:12px;font-weight:700;text-align:center;padding:8px 4px;line-height:1.3}
+.tile i{font-style:normal;font-size:24px;line-height:1}
+.tile:active{background:var(--card2)}
+@media (max-width:360px){.tiles{grid-template-columns:repeat(3,1fr)}}
+
+/* ───────── 섹션 공통 ───────── */
+section{padding:30px 0 6px;scroll-margin-top:104px}
+.sec-h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.sec-h .ic{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--line);
+  display:grid;place-items:center;font-size:22px;flex-shrink:0}
+.sec-h h2{font-size:20px;line-height:1.25;font-weight:800}
+.sec-h p{font-size:13px;color:var(--mut);line-height:1.4}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card h3{font-size:16px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 .tag{font-size:11px;font-weight:800;padding:2px 8px;border-radius:9px;background:var(--cyan);color:var(--on-accent)}
+.card h3 .tag.am{background:var(--amber);color:#1a1200}
+.card h3 .tag.vi{background:var(--violet);color:#1a0536}
+.lead{color:var(--mut);font-size:14px;margin-bottom:10px}
+
+/* 버튼 표기 (앱 안 버튼을 글자로 표시) */
+.k{display:inline-flex;align-items:center;gap:3px;padding:1px 8px;border-radius:8px;
+  background:var(--card2);border:1px solid var(--line);font-weight:700;font-size:.92em;line-height:1.5;white-space:nowrap}
+.k.cy{background:var(--cyan);color:var(--on-accent);border-color:var(--cyan)}
+.k.am{background:var(--amber);color:#1a1200;border-color:var(--amber)}
+.k.vi{background:var(--violet);color:#1a0536;border-color:var(--violet)}
+
+/* 단계 목록 */
+ol.steps{list-style:none;counter-reset:s;display:grid;gap:10px}
+ol.steps>li{counter-increment:s;display:flex;gap:11px;align-items:flex-start}
+ol.steps>li::before{content:counter(s);width:24px;height:24px;border-radius:50%;flex-shrink:0;margin-top:1px;
+  background:var(--cyan);color:var(--on-accent);font-weight:800;font-size:13px;display:grid;place-items:center}
+ol.steps.am>li::before{background:var(--amber);color:#1a1200}
+ol.steps>li>div{flex:1;min-width:0}
+ul.dots{list-style:none;display:grid;gap:8px}
+ul.dots>li{display:flex;gap:9px}
+ul.dots>li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--cyan);margin-top:9px;flex-shrink:0}
+
+/* 안내 상자 */
+.note{display:flex;gap:10px;border-radius:12px;padding:11px 13px;font-size:13.5px;margin-top:12px;line-height:1.55}
+.note b{font-weight:800}
+.note.tip{background:rgba(0,180,216,.12);border:1px solid rgba(0,180,216,.35)}
+.note.warn{background:rgba(255,171,0,.13);border:1px solid rgba(255,171,0,.4)}
+.note.stop{background:rgba(255,82,82,.12);border:1px solid rgba(255,82,82,.4)}
+.note .e{font-size:18px;line-height:1.4;flex-shrink:0}
+
+/* 표 */
+table.t{width:100%;border-collapse:collapse;font-size:13.5px}
+table.t th,table.t td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+table.t th{color:var(--mut);font-weight:700;font-size:12px;white-space:nowrap}
+table.t tr:last-child td{border-bottom:0}
+table.t td:first-child{font-weight:800;white-space:nowrap}
+
+/* 배지 */
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.bdg{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:800;color:#fff}
+.bdg.g{background:#00a844}.bdg.c{background:#0097b8}.bdg.a{background:#d98f00}.bdg.r{background:#d63a3a}.bdg.v{background:#7c3aed}
+
+/* ───────── 화면 구성 목업 ───────── */
+.screen{display:grid;gap:18px;grid-template-columns:1fr;justify-items:center}
+@media (min-width:640px){.screen{grid-template-columns:300px 1fr;align-items:start;justify-items:stretch}}
+.phone{width:100%;max-width:290px;height:520px;background:#000;border-radius:30px;padding:8px;
+  box-shadow:0 10px 34px rgba(0,0,0,.45);position:relative}
+.scr{height:100%;border-radius:23px;overflow:hidden;display:flex;flex-direction:column;background:#07101f;position:relative}
+.m-top{height:44px;background:linear-gradient(180deg,#0f2548,#0d1f3c);display:flex;align-items:center;gap:5px;padding:0 8px;flex-shrink:0}
+.m-logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,#0288d1,#00b4d8);display:grid;place-items:center;font-size:13px;color:#fff;flex-shrink:0}
+.m-ttl{font-size:11px;font-weight:800;color:#e8f4fd;line-height:1.1}
+.m-ttl small{display:block;font-size:6px;font-weight:500;color:#78909c;letter-spacing:.5px}
+.m-live{margin-left:auto;font-size:8px;font-weight:800;padding:3px 7px;border-radius:10px;color:#69f0ae;border:1px solid #00c853;background:rgba(0,200,83,.15);position:relative;flex-shrink:0;white-space:nowrap}
+.m-src{font-size:8px;font-weight:800;padding:3px 6px;border-radius:9px;color:#8ad7ff;border:1px solid rgba(0,180,216,.4);background:rgba(0,180,216,.12);position:relative;flex-shrink:0;white-space:nowrap}
+.m-stat{height:22px;background:#0b1830;display:flex;gap:4px;align-items:center;padding:0 8px;flex-shrink:0;position:relative;
+  font-size:8px;color:#9fb6c8;font-weight:700;border-bottom:1px solid rgba(0,180,216,.12)}
+.m-stat b{color:#00e5ff}
+.m-map{flex:1;background:#a9d6e8;position:relative;overflow:hidden}
+.m-land{position:absolute;left:-30px;top:-20px;width:120px;height:300px;background:#f4f1e8;border-radius:0 60% 40% 0/0 30% 50% 0;transform:rotate(-8deg)}
+.m-aton{position:absolute;width:10px;height:18px;border-radius:5px 5px 2px 2px;background:#cfd8dc;border:1px solid #90a4ae}
+.m-aton::before{content:"";position:absolute;top:-4px;left:2px;width:5px;height:5px;border-radius:50%;background:var(--d,#ffab00)}
+.m-ship{position:absolute;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:13px solid var(--d,#00c853)}
+.m-pop{position:absolute;left:50%;top:44%;transform:translateX(-50%);width:150px;background:#0d1f3c;border:1px solid rgba(0,180,216,.4);
+  border-radius:9px;padding:7px 8px;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.m-pop .nm{font-size:9px;font-weight:800;color:#e8f4fd}
+.m-pop .rw{font-size:7.5px;color:#9fb6c8;margin-top:2px;line-height:1.5}
+.m-pop .rw b{color:#ffab00}
+.m-pop .bt{margin-top:5px;font-size:7.5px;font-weight:800;text-align:center;background:var(--amber);color:#1a1200;border-radius:6px;padding:3px}
+.m-nav{height:44px;background:#0d1f3c;border-top:1px solid rgba(0,180,216,.2);display:flex;flex-shrink:0}
+.m-nv{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:6px;color:#78909c;position:relative;border-top:2px solid transparent}
+.m-nv i{font-style:normal;font-size:12px}
+.m-nv.on{color:#00b4d8;border-top-color:#00b4d8}
+.m-nv.cfg{color:#ffd740}
+.pin{position:absolute;top:-8px;right:-7px;width:17px;height:17px;border-radius:50%;background:var(--amber);color:#1a1200;
+  font-size:10px;font-weight:800;font-style:normal;display:grid;place-items:center;border:2px solid #07101f;z-index:5;line-height:1}
+.pin.l{right:auto;left:-7px}
+.pin.b{top:auto;bottom:-8px}
+.legend{display:grid;gap:8px;width:100%}
+.lg{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13.5px}
+.lg .pn{width:20px;height:20px;border-radius:50%;background:var(--amber);color:#1a1200;font-weight:800;font-size:11px;display:grid;place-items:center;flex-shrink:0;margin-top:2px}
+.lg b{display:block;font-size:14px}
+.lg span{color:var(--mut);font-size:13px}
+
+/* ───────── 2열 ───────── */
+.dual{display:grid;gap:12px}
+@media (min-width:640px){.dual{grid-template-columns:1fr 1fr}.dual .card{margin-bottom:0}}
+
+/* RF 막대 미니 그림 */
+.rfbar{display:grid;gap:6px;margin-top:4px}
+.rfrow{display:flex;align-items:center;gap:8px;font-size:12px}
+.rfrow .lb{width:58px;flex-shrink:0;font-weight:700;color:var(--mut);white-space:nowrap;font-size:11px}
+.rftrk{flex:1;height:14px;border-radius:7px;background:var(--card2);overflow:hidden}
+.rffil{height:100%;border-radius:7px;background:linear-gradient(90deg,var(--cyan),var(--cyan2))}
+.rfrow .vl{width:52px;text-align:right;font-weight:800;font-size:11px;color:var(--cyan2);flex-shrink:0}
+
+/* ───────── FAQ ───────── */
+details.faq{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:8px;overflow:hidden}
+details.faq summary{list-style:none;cursor:pointer;padding:14px 44px 14px 14px;font-weight:700;font-size:14.5px;position:relative;min-height:48px}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary::after{content:"＋";position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--cyan2);font-size:18px}
+details.faq[open] summary::after{content:"－"}
+details.faq .a{padding:0 14px 14px;color:var(--mut);font-size:14px}
+details.faq .a b{color:var(--txt)}
+
+footer{margin:34px 0 28px;text-align:center;color:var(--mut);font-size:12.5px;line-height:1.7}
+.top-btn{position:fixed;right:14px;bottom:calc(16px + env(safe-area-inset-bottom,0));width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--line);background:var(--cyan);color:var(--on-accent);font-size:18px;font-weight:800;cursor:pointer;
+  box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.top-btn.show{opacity:1;pointer-events:auto}
+@media print{.head,.top-btn,.tiles{display:none}.card,.lg,details.faq{box-shadow:none;break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<!-- ════════ 상단 고정 ════════ -->
+<header class="head">
+  <div class="head-row">
+    <button class="hbtn standalone-only" onclick="goBack()" aria-label="앱으로 돌아가기">‹ 앱</button>
+    <div class="head-ico">⚓</div>
+    <div class="head-ttl">AtoN AIS 매뉴얼<small>항로표지 AIS 수신·설정 사용법</small></div>
+    <div class="head-sp"></div>
+    <button class="hbtn theme-toggle" id="themeBtn" type="button">☀️</button>
+  </div>
+  <nav class="chips" id="chips" aria-label="목차">
+    <button class="chip chip-theme theme-toggle" type="button"></button>
+    <a class="chip on" href="#start">시작</a>
+    <a class="chip" href="#screen">화면</a>
+    <a class="chip" href="#connect">연결</a>
+    <a class="chip" href="#view">수신·보기</a>
+    <a class="chip" href="#analysis">분석</a>
+    <a class="chip" href="#config">장비 설정</a>
+    <a class="chip" href="#safe">안전 수칙</a>
+    <a class="chip" href="#info">앱 정보</a>
+    <a class="chip" href="#faq">문제 해결</a>
+  </nav>
+</header>
+
+<main class="wrap">
+
+<!-- ════════ 시작 ════════ -->
+<section id="start" class="hero">
+  <h1><em>3분</em>이면 수신부터<br>장비 설정까지</h1>
+  <p>항로표지·선박 AIS를 실시간으로 받아 보고, 신호를 점검하고, 항로표지 AIS 장비 설정을 읽고 바꿉니다.</p>
+
+  <div class="start">
+    <div class="step3"><div class="num">1</div><div><b>USB 장비를 연결</b><span>RTL-SDR 동글 · NMEA 수신기 · 설정포트 → 자동 수신</span></div><div class="big">🔌</div></div>
+    <div class="step3"><div class="num">2</div><div><b>지도·목록에서 확인</b><span>받은 선박·항로표지를 지도와 목록에서 바로 확인</span></div><div class="big">🗺</div></div>
+    <div class="step3"><div class="num">3</div><div><b>분석·설정으로 점검</b><span>신호세기·수신주기 점검, 장비 설정 읽기·변경</span></div><div class="big">⚙️</div></div>
+  </div>
+
+  <div class="gov">
+    <span class="e">🔒</span>
+    <div><b>내부 전용 · 외부 배포 금지</b> — 본 앱은 <b>항로표지 업무 담당자 전용</b>입니다. 실제 항로표지 AIS 장비의 설정을 바꿀 수 있으므로, 담당자 외 사용 및 외부 배포·공유를 금지합니다.</div>
+  </div>
+
+  <div class="tiles" aria-label="빠른 이동">
+    <a class="tile" href="#connect"><i>🔌</i>장비 연결</a>
+    <a class="tile" href="#view"><i>🗺</i>지도·목록</a>
+    <a class="tile" href="#view"><i>📡</i>NMEA 로그</a>
+    <a class="tile" href="#analysis"><i>📊</i>신호 분석</a>
+    <a class="tile" href="#config"><i>⚙️</i>장비 설정</a>
+    <a class="tile" href="#config"><i>🔵</i>가상 표지</a>
+    <a class="tile" href="#safe"><i>🛡</i>안전 수칙</a>
+    <a class="tile" href="#faq"><i>❓</i>문제 해결</a>
+  </div>
+</section>
+
+<!-- ════════ 화면 구성 ════════ -->
+<section id="screen">
+  <div class="sec-h"><div class="ic">📱</div><div><h2>화면 한눈에 보기</h2><p>번호 ➜ 아래 설명과 같아요</p></div></div>
+
+  <div class="screen">
+    <div class="phone" role="img" aria-label="AtoN AIS 지도 화면 구성도">
+      <div class="scr">
+        <div class="m-top">
+          <div class="m-logo">⚓</div>
+          <div class="m-ttl">AtoN AIS<small>AIDS TO NAVIGATION AIS</small></div>
+          <div class="m-live">● 수신중<i class="pin">1</i></div>
+          <div class="m-src">RTL-SDR<i class="pin">2</i></div>
+        </div>
+        <div class="m-stat">
+          ⏱ <b>10:49</b> · 총 <b>859</b> · ⚡ <b>88</b>/분
+          <i class="pin" style="top:-5px;right:8px">3</i>
+        </div>
+        <div class="m-map">
+          <div class="m-land"></div>
+          <span class="m-aton" style="left:150px;top:40px"></span>
+          <span class="m-aton" style="left:92px;top:150px;--d:#b388ff"></span>
+          <span class="m-ship" style="left:180px;top:120px;--d:#00c853"></span>
+          <span class="m-ship" style="left:120px;top:210px;--d:#1565c0"></span>
+          <div class="m-pop">
+            <div class="nm">🔦 POHANG L/H</div>
+            <div class="rw">MMSI 994401234 · <b>Type 25</b></div>
+            <div class="rw">수신 <b>21초전</b></div>
+            <div class="bt">상세정보 보기 ›</div>
+            <i class="pin" style="top:-8px;right:-7px">4</i>
+          </div>
+        </div>
+        <div class="m-nav">
+          <div class="m-nv on"><i>🗺</i>지도</div>
+          <div class="m-nv"><i>📋</i>목록</div>
+          <div class="m-nv"><i>📡</i>NMEA</div>
+          <div class="m-nv"><i>📊</i>분석</div>
+          <div class="m-nv cfg"><i>⚙️</i>설정<i class="pin" style="top:-9px;right:1px">6</i></div>
+          <div class="m-nv"><i>📖</i>사용법<i class="pin b" style="left:50%;transform:translateX(-50%)">5</i></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="lg"><div class="pn">1</div><div><b>● 수신 상태</b><span>초록 = 수신 중 / 회색 = 대기. 데이터가 들어오면 켜져요</span></div></div>
+      <div class="lg"><div class="pn">2</div><div><b>수신원(입력원)</b><span>RTL-SDR · USB NMEA · TCP 중 현재 들어오는 경로</span></div></div>
+      <div class="lg"><div class="pn">3</div><div><b>수신 통계</b><span>업타임 · 총 수신 문장 수 · 분당 수신율(문/분)</span></div></div>
+      <div class="lg"><div class="pn">4</div><div><b>지도 마커 · 팝업</b><span>🔦 물리표지 · 🔵 가상표지 · 🚢 선박. 탭하면 명칭·MMSI·종류·수신시각, <b style="display:inline;font-size:13px">상세정보 보기</b></span></div></div>
+      <div class="lg"><div class="pn">5</div><div><b>하단 탭</b><span>지도 · 목록 · NMEA · 분석 · 설정 · 사용법</span></div></div>
+      <div class="lg"><div class="pn">6</div><div><b>⚙️ 설정 탭</b><span>항로표지 AIS <b style="display:inline;font-size:13px">장비 설정</b> 읽기·변경 (담당자 전용)</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 연결 ════════ -->
+<section id="connect">
+  <div class="sec-h"><div class="ic">🔌</div><div><h2>장비 연결</h2><p>USB를 꽂으면 종류를 자동 감지해요</p></div></div>
+
+  <div class="card">
+    <h3>📻 RTL-SDR AIS 동글 <span class="tag">가장 간편</span></h3>
+    <ol class="steps">
+      <li><div>동글 → <b>OTG 케이블</b> → 스마트폰에 연결.</div></li>
+      <li><div>USB 권한 팝업에서 <span class="k cy">허용</span> → 자동으로 SDR 복조·수신 시작.</div></li>
+    </ol>
+    <div class="note tip"><span class="e">📡</span><div>수신율은 <b>안테나 종류·위치·방향</b>이 좌우해요. 가능한 한 높고 트인 곳, 금속 구조물에서 떨어진 곳에 두세요.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>🔗 USB NMEA 수신기 / 설정포트</h3>
+    <ol class="steps">
+      <li><div>AIS 수신기 또는 <b>AtoN 장비 설정포트(RS-232)</b> → OTG → 스마트폰.</div></li>
+      <li><div>자동으로 NMEA 수신. 장비 <b>설정 통신(읽기·쓰기)</b>도 이 포트를 사용해요.</div></li>
+    </ol>
+    <div class="note tip"><span class="e">⚙️</span><div>통신속도(<b>38400</b> 또는 <b>115200</b>)는 <span class="k">⚙️ 설정</span> 탭에서 장비에 맞춰 선택하세요.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>🌐 외부 앱 연동 (TCP)</h3>
+    <p class="lead" style="margin:0">다른 앱(ECDIS·플로터 등)에서 <span class="k">127.0.0.1 : 10110</span> 으로 접속하면, 이 앱이 받은 AIS를 NMEA로 전달해요.</p>
+  </div>
+
+  <div class="card">
+    <h3>📋 권한</h3>
+    <table class="t">
+      <tr><td>USB 권한</td><td>연결 시 팝업에서 <b>허용</b>. 거부됐으면 설정 → 앱 → AtoN AIS → 권한 → USB</td></tr>
+      <tr><td>위치 권한</td><td>내 위치 기능 사용 시 필요. 설정 → 앱 → AtoN AIS → 권한 → 위치</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ════════ 수신·보기 ════════ -->
+<section id="view">
+  <div class="sec-h"><div class="ic">🗺</div><div><h2>수신 데이터 보기</h2><p>지도 · 목록 · NMEA · 상세정보</p></div></div>
+
+  <div class="card">
+    <h3>🗺 지도</h3>
+    <ul class="dots">
+      <li><div>받은 선박·항로표지가 위치에 표시돼요. 마커를 탭하면 <b>명칭·MMSI·종류·수신시각</b>이 나와요.</div></li>
+      <li><div><span class="k am">🔦 물리표지</span> · <span class="k vi">🔵 가상표지</span> · <span class="k">🚢 선박</span> 을 색으로 구분해요.</div></li>
+      <li><div>팝업의 <span class="k am">상세정보 보기 ›</span> 로 전체 정보 화면으로 이동.</div></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>📋 목록</h3>
+    <ul class="dots">
+      <li><div>수신한 모든 객체를 목록으로 봐요. 위쪽 필터 칩으로 좁혀요.</div></li>
+      <li><div><span class="k">전체</span> · <span class="k">🚢 선박</span> · <span class="k am">🔦 물리</span> · <span class="k vi">🔵 가상</span> — 각 건수가 칩에 표시돼요.</div></li>
+      <li><div>항목을 탭하면 지도의 마커와 같은 <b>상세정보</b>로 이동.</div></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>📡 NMEA 로그</h3>
+    <p class="lead" style="margin:0 0 8px">수신 원문(AIVDM)을 실시간으로 봐요. 메시지 타입별로 색·아이콘이 달라요.</p>
+    <table class="t">
+      <tr><th>타입</th><th>내용</th><th>앱 표시</th></tr>
+      <tr><td>MT 1/2/3</td><td>선박 위치·속도·침로</td><td>선박</td></tr>
+      <tr><td>MT 5</td><td>선박 정적·항해정보(선명·목적지)</td><td>선박정보</td></tr>
+      <tr><td>MT 21</td><td>항로표지 위치·명칭·종류·상태</td><td>물리/가상</td></tr>
+      <tr><td>MT 6</td><td>(한국) 등명기·배터리·태양광 등 상태</td><td>상태정보</td></tr>
+      <tr><td>MT 8</td><td>(한국) 풍향·파고·수온 등 해양기상</td><td>해양기상</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>📄 상세정보 화면</h3>
+    <table class="t">
+      <tr><td>📍 기본정보</td><td>MMSI · 종류 · 위치 · 치수 · 상태비트 분석</td></tr>
+      <tr><td>🔋 MT6 상태정보</td><td>등명기·배터리·태양광·전압·전류 (물리표지)</td></tr>
+      <tr><td>🌊 MT8 해양기상</td><td>풍향·풍속·파고·수온 등 (물리표지)</td></tr>
+      <tr><td>🕐 수신 기록</td><td>해당 MMSI의 수신 시각·간격 이력</td></tr>
+    </table>
+    <div class="note tip"><span class="e">🔍</span><div>기본정보의 <b>AtoN Status 비트 분석</b>은 8비트 상태를 RACON·등명기·경보 등으로 풀어 보여줘요. 기본값(00000000)만 계속 나오면 AIS–센서 자동연계 구성을 먼저 확인하세요.</div></div>
+  </div>
+</section>
+
+<!-- ════════ 분석 ════════ -->
+<section id="analysis">
+  <div class="sec-h"><div class="ic">📊</div><div><h2>신호 분석 (분석 탭)</h2><p>안테나·수신환경과 장비 송신을 점검</p></div></div>
+
+  <div class="dual">
+    <div class="card">
+      <h3>📡 실시간 RF 모니터</h3>
+      <div class="rfbar" aria-hidden="true">
+        <div class="rfrow"><span class="lb">994401…</span><span class="rftrk"><span class="rffil" style="width:88%"></span></span><span class="vl">-71 dB</span></div>
+        <div class="rfrow"><span class="lb">440123…</span><span class="rftrk"><span class="rffil" style="width:64%"></span></span><span class="vl">-82 dB</span></div>
+        <div class="rfrow"><span class="lb">A ▮▮▮</span><span class="rftrk"><span class="rffil" style="width:72%;background:#00c853"></span></span><span class="vl">A 채널</span></div>
+        <div class="rfrow"><span class="lb">B ▮▮</span><span class="rftrk"><span class="rffil" style="width:48%;background:#ffab00"></span></span><span class="vl">B 채널</span></div>
+      </div>
+      <ul class="dots" style="margin-top:12px">
+        <li><div>최근 <b>30분</b> 안에 받은 신호를 <b>가장 강한(가까운) 순서</b>로 보여줘요.</div></li>
+        <li><div>채널 <b>A/B</b> 활성도 막대로 양쪽 수신 상태를 확인.</div></li>
+      </ul>
+      <div class="note tip"><span class="e">💡</span><div>안테나 연결·방향·위치를 바꿔 가며 막대가 올라가는 쪽으로 맞추면 수신이 좋아져요.</div></div>
+    </div>
+
+    <div class="card">
+      <h3>🕐 수신주기 점검</h3>
+      <ol class="steps">
+        <li><div>대상 <b>MMSI</b>와 기준 주기를 입력(선택).</div></li>
+        <li><div><span class="k cy">분석 시작</span> → MT21 · MT6 · MT8 의 <b>실제 수신주기·간격</b>을 계산.</div></li>
+        <li><div>수신횟수·평균 간격으로 <b>장비가 정상 송신 중인지</b> 판정.</div></li>
+      </ol>
+      <div class="note warn"><span class="e">⏱</span><div>항로표지는 보통 MT21을 <b>3~6분</b>, 한국 MT6/MT8은 <b>10분</b> 간격으로 방송해요. 간격이 크게 벌어지면 점검이 필요해요.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 장비 설정 ════════ -->
+<section id="config">
+  <div class="sec-h"><div class="ic">⚙️</div><div><h2>장비 설정 (설정 탭)</h2><p>IEC 62320-2 기반 읽기·쓰기·검증</p></div></div>
+
+  <div class="note stop" style="margin-top:0"><span class="e">🔒</span><div><b>담당자 전용.</b> 이 탭은 실제 항로표지 AIS 장비의 설정을 바꿀 수 있어요. 운용 중인 표지는 각별히 신중하게 다루세요.</div></div>
+
+  <div class="card">
+    <h3>진행 순서</h3>
+    <ol class="steps am">
+      <li><div><b>통신속도</b> — 장비에 맞춰 <span class="k">38400</span> 또는 <span class="k">115200</span> 선택.</div></li>
+      <li><div><b>현재값 읽기</b> — <span class="k">AID</span><span class="k">ACE</span><span class="k">ACF</span><span class="k">AAR</span> 읽기, 또는 <span class="k cy">📥 현재값을 설정폼에 불러오기</span>. <b>장비를 바꾸지 않는 읽기 전용</b>이에요.</div></li>
+      <li><div><b>값 수정</b> — 물리 또는 가상 표지로 설정(아래 참조).</div></li>
+      <li><div><b>생성 + 자기검증</b> — 입력값으로 Message 21 · IEC 62320-2 문장을 만들고, 되돌려 디코딩해 입력값과 같은지 확인.</div></li>
+      <li><div><b>전송 + Read-back</b> — 장비로 전송 후 자동으로 다시 읽어 반영 여부를 <b>✓ / ✗</b> 로 검증.</div></li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>🔦 물리 표지 설정 <span class="tag am">Physical</span></h3>
+    <ul class="dots">
+      <li><div><b>국 종류</b>를 <span class="k am">물리(Physical)</span> 로 두고, MMSI · AtoN 종류(고정/유동) · 명칭 · 위치 · 치수 · 상태비트 입력.</div></li>
+      <li><div><b>상태비트</b>는 2진수(8비트)로 입력해요(RACON·등명기·경보).</div></li>
+      <li><div><b>위·경도</b>는 소수점 <b>6자리</b>까지 반영돼요.</div></li>
+      <li><div><b>방송주기(AAR)</b> — MT21 과 함께, MT6 는 <b>Index1 = 1분(슬립방지)</b> · <b>Index2 = 10분(원격관리)</b> 로 각각 설정.</div></li>
+    </ul>
+    <div class="note tip"><span class="e">📡</span><div>스케줄(AAR)은 <b>채널 A·B 양쪽에 동일</b>하게 적용돼요. 한쪽만 바꾸면 반영이 안 된 것처럼 보일 수 있어요.</div></div>
+  </div>
+
+  <div class="card">
+    <h3>🔵 가상 표지 설정 <span class="tag vi">Virtual</span></h3>
+    <ul class="dots">
+      <li><div><b>국 종류</b>를 <span class="k vi">가상(Virtual)</span> 으로 선택 → <b>부모(실제) 장비 MMSI</b> 입력. 부모 장비가 가상표지를 대신 송신해요.</div></li>
+      <li><div>가상 MMSI(통상 <b>995…</b>)는 <b>부모와 달라야</b> 해요.</div></li>
+      <li><div>EPFS 는 <b>Surveyed(7)</b> 자동, <b>Virtual Flag = 1</b>.</div></li>
+      <li><div>가상표지는 <b>MT21만</b> 방송해요 — MT6 / MT8 은 자동으로 비활성화돼요.</div></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>IEC 62320-2 문장 (참고)</h3>
+    <table class="t">
+      <tr><th>포매터</th><th>설정 내용</th></tr>
+      <tr><td>AID</td><td>MMSI 등록 / 가상표지 부모–자식 관계</td></tr>
+      <tr><td>ACE</td><td>상태 · 위치이탈 · 거동 · 명칭 · 치수</td></tr>
+      <tr><td>ACF</td><td>EPFS · 위·경도 · 정확도 · 송수신 채널 · 출력 · 종류 · 가상 플래그</td></tr>
+      <tr><td>AAR</td><td>방송 스케줄(메시지별 주기·슬롯)</td></tr>
+    </table>
+    <p class="lead" style="margin:10px 0 0">전송 문장의 Talker ID 는 <span class="k">AI</span>, 장비 응답은 <span class="k">AN</span> 으로 구분해요.</p>
+  </div>
+</section>
+
+<!-- ════════ 안전 수칙 ════════ -->
+<section id="safe">
+  <div class="sec-h"><div class="ic">🛡</div><div><h2>안전 수칙</h2><p>설정을 바꾸기 전에 꼭 확인</p></div></div>
+  <div class="card">
+    <ul class="dots">
+      <li><div><b>현재값 백업</b> — 전송 전에 반드시 현재값을 읽어 기록해 두세요.</div></li>
+      <li><div><b>테스트 장비 우선</b> — 설정 변경은 예비·시험 장비에서 먼저 검증.</div></li>
+      <li><div><b>MMSI 재확인</b> — 전송 전 대상 MMSI가 맞는지 다시 확인.</div></li>
+      <li><div><b>Read-back 확인</b> — 전송 후 <b>✓ 반영 확인</b>까지 본 뒤 완료 처리.</div></li>
+      <li><div><b>운용 중 표지는 신중히</b> — 방송 중인 표지는 영향 범위를 고려해 작업.</div></li>
+    </ul>
+    <div class="note stop"><span class="e">⚠️</span><div>이 앱은 참고·점검용 보조 도구이며, 공식 항법장비(ECDIS, AIS 트랜스폰더)를 <b>대체하지 않습니다.</b></div></div>
+  </div>
+</section>
+
+<!-- ════════ 앱 정보 ════════ -->
+<section id="info">
+  <div class="sec-h"><div class="ic">ℹ️</div><div><h2>앱 정보 · 라이선스</h2><p>구성과 오픈소스 고지</p></div></div>
+
+  <div class="card">
+    <h3>AtoN AIS</h3>
+    <p class="lead" style="margin:0">패키지 <span class="k">com.aiswatch</span> · 항로표지 AIS 실시간 수신·디코딩 및 IEC 62320-2 기반 장비 설정·점검 도구 (Android).</p>
+  </div>
+
+  <div class="card">
+    <h3>📦 오픈소스 라이선스 고지</h3>
+    <p class="lead">본 앱은 아래 오픈소스를 사용합니다. 각 구성요소의 저작권·라이선스는 해당 프로젝트에 귀속되며, 전문은 각 저장소를 참조하십시오.</p>
+    <table class="t">
+      <tr><td>librtlsdr</td><td>RTL-SDR USB 드라이버 · GPL-2.0</td></tr>
+      <tr><td>rtl-ais</td><td>AIS 수신 유틸리티 · GPL-2.0</td></tr>
+      <tr><td>AIS-catcher</td><td>AIS 복조 엔진 · GPL-3.0</td></tr>
+      <tr><td>NanoHTTPD</td><td>내장 HTTP 서버 · BSD-3-Clause</td></tr>
+      <tr><td>usb-serial-for-android</td><td>USB 시리얼 통신 · MIT</td></tr>
+      <tr><td>Leaflet</td><td>지도 표시 · BSD-2-Clause</td></tr>
+    </table>
+    <div class="note warn"><span class="e">📌</span><div>GPL 구성요소의 대응 소스코드는 <b>내부 담당자</b>에게 제공됩니다. 상기 목록·라이선스는 참고용이며, <b>외부 배포 시에는 라이선스 담당자의 확인</b>을 받으십시오.</div></div>
+  </div>
+</section>
+
+<!-- ════════ 문제 해결 ════════ -->
+<section id="faq">
+  <div class="sec-h"><div class="ic">❓</div><div><h2>문제 해결</h2><p>자주 묻는 질문</p></div></div>
+
+  <details class="faq"><summary>🔌 USB를 꽂아도 수신이 안 돼요</summary><div class="a">
+    ① USB 권한 팝업에서 <b>허용</b>했는지 확인 ② <span class="k">⚙️ 설정</span> 탭에서 <b>통신속도(38400/115200)</b>가 장비와 맞는지 ③ <b>OTG 케이블</b>이 맞는지, 데이터 지원 케이블인지 확인. 상단 <b>● 수신 상태</b>가 초록인지 보세요.
+  </div></details>
+
+  <details class="faq"><summary>🗺 지도에 아무것도 안 보여요</summary><div class="a">
+    받은 데이터가 없으면 비어 있어요. 상단 <b>수신 통계(문/분)</b>가 0이면 안테나·연결을, 숫자가 올라가면 위치가 유효한 객체가 들어오길 잠시 기다려 보세요. <span class="k">📡 NMEA</span> 로그에 원문이 찍히는지도 확인하세요.
+  </div></details>
+
+  <details class="faq"><summary>🔦 물리표지(MT21)가 목록에 안 나와요</summary><div class="a">
+    MT21 은 위치가 없어도 수신되면 기록돼요. <span class="k">📡 NMEA</span> 에 <b>21</b> 이 찍히는지 확인하고, 목록 필터를 <span class="k am">🔦 물리</span> 로 바꿔 보세요. 여러 조각으로 오는 문장은 모두 수신돼야 합쳐져 표시됩니다.
+  </div></details>
+
+  <details class="faq"><summary>⚙️ 설정을 전송했는데 장비에 반영이 안 돼요</summary><div class="a">
+    ① 전송 후 <b>Read-back ✓</b> 가 떴는지 확인 ② 스케줄(AAR)은 <b>채널 A·B 양쪽 동일</b>하게 보내야 해요 — 한쪽만 바뀌면 적용 안 된 것처럼 보여요 ③ 대상 <b>MMSI</b>와 <b>통신속도</b>가 맞는지 재확인하세요.
+  </div></details>
+
+  <details class="faq"><summary>🔵 가상표지가 일부만 반영돼요</summary><div class="a">
+    가상표지는 <b>MT21만</b> 방송하는 게 정상이에요. MT6 / MT8 은 자동 비활성화되므로 안 나오는 게 맞아요. 가상 MMSI가 <b>부모와 다른지</b>, EPFS 가 <b>Surveyed</b>, Virtual Flag 가 <b>1</b> 인지 확인하세요.
+  </div></details>
+
+  <details class="faq"><summary>🔢 통신속도는 무엇으로 맞춰야 하나요</summary><div class="a">
+    장비 사양에 따라 <b>38400</b> 또는 <b>115200</b> 이에요. 기존 통신포트를 스마트폰 USB 에 연결하고 속도만 맞추면 NMEA 가 들어와요. 모르면 둘을 번갈아 시도해 수신되는 쪽으로 두세요.
+  </div></details>
+
+  <details class="faq"><summary>◀ 뒤로가기를 누르면?</summary><div class="a">
+    열린 상세·팝업 → 이전 화면 → 지도 순으로 한 단계씩 돌아가요. 매뉴얼을 보는 중이면 매뉴얼이 먼저 닫혀요.
+  </div></details>
+</section>
+
+<footer>
+  AtoN AIS 사용 매뉴얼<br>
+  항로표지 업무 담당자 전용 · 외부 배포 금지<br>
+  화면 구성은 앱 업데이트에 따라 조금 달라질 수 있어요.
+</footer>
+
+</main>
+
+<button class="top-btn" id="topBtn" type="button" aria-label="맨 위로">↑</button>
+
+<script>
+(function(){
+  var root = document.documentElement;
+
+  /* 앱 안(iframe)에서 열렸는지 */
+  try { if (window.self !== window.top) root.classList.add('framed'); }
+  catch(e){ root.classList.add('framed'); }
+
+  /* 앱으로 돌아가기 (새 탭/단독 실행 시) */
+  window.goBack = function(){
+    if (history.length > 1) history.back();
+    else location.href = './';
+  };
+
+  /* 밝은/어두운 화면 */
+  var KEY = 'atonAisManualTheme', toggles = [].slice.call(document.querySelectorAll('.theme-toggle'));
+  function setTheme(t){
+    root.setAttribute('data-theme', t);
+    var light = (t === 'light');
+    toggles.forEach(function(b){
+      if (b.classList.contains('chip-theme')) b.textContent = light ? '🌙 어둡게' : '☀️ 밝게';
+      else b.textContent = light ? '🌙' : '☀️';
+      b.setAttribute('aria-label', light ? '어두운 화면으로 바꾸기' : '밝은 화면으로 바꾸기');
+    });
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', light ? '#f2f6fa' : '#07101f');
+  }
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
+  setTheme(saved === 'light' ? 'light' : 'dark');
+  toggles.forEach(function(b){
+    b.addEventListener('click', function(){
+      var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      setTheme(next);
+      try { localStorage.setItem(KEY, next); } catch(e){}
+    });
+  });
+
+  /* 목차 칩: 현재 위치 강조 */
+  var chips = [].slice.call(document.querySelectorAll('#chips a.chip'));
+  var secs = chips.map(function(c){ return document.querySelector(c.getAttribute('href')); });
+  function mark(id){
+    chips.forEach(function(c){
+      var on = c.getAttribute('href') === '#' + id;
+      c.classList.toggle('on', on);
+      if (on && c.scrollIntoView) {
+        var box = c.parentNode, l = c.offsetLeft - (box.clientWidth - c.offsetWidth) / 2;
+        box.scrollTo ? box.scrollTo({left: l, behavior: 'smooth'}) : (box.scrollLeft = l);
+      }
+    });
+  }
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if (e.isIntersecting) mark(e.target.id); });
+    }, {rootMargin: '-30% 0px -62% 0px'});
+    secs.forEach(function(s){ if (s) io.observe(s); });
+  }
+
+  /* 맨 위로 */
+  var top = document.getElementById('topBtn');
+  window.addEventListener('scroll', function(){ top.classList.toggle('show', window.scrollY > 700); }, {passive:true});
+  top.addEventListener('click', function(){ window.scrollTo({top:0}); });
+})();
+<\/script>
+</body>
+</html>
+`;
+    }
+  }
+  else {
+    panel.style.display='flex'; lb.style.display='block'; nb.style.display='none';
+    if(gb)gb.style.display='none';
+    if(_frr)_frr.style.display='';
+    var _pt2=document.getElementById('panelTitle'); if(_pt2)_pt2.parentElement.style.display='';
+    var _rtb2=document.getElementById('raw-toggle-btn'); if(_rtb2)_rtb2.style.display='none';
+    stopRawView();
+    renderList();
+  }
+}
+
+// ── 상세 ──────────────────────────────────────────────────────────
+function openDetail(mmsi){sel=window._d[mmsi];if(!sel)return;renderDetail();document.getElementById("detail-view").classList.add("open");map.closePopup();}
+function closeDetail(){document.getElementById("detail-view").classList.remove("open");sel=null;updateMarkers();}
+function makeField(k,v,c){var vStr=(v!=null&&v!==undefined)?String(v):"-";return'<div class="field"><span class="fk">'+k+'</span><span class="fv"'+(c?' style="color:'+c+'"':'')+'>'+vStr+'</span></div>';}
+function makeSection(title,color,fields){return'<div class="section"><div class="sec-title" style="color:'+color+'">'+title+'</div>'+fields.join("")+'</div>';}
+
+function renderDetail(){
+  if(!sel)return;
+  var a=sel,fr=stale(a.last_seen),isA=a.msg_type===21;
+  var pct=Math.max(0,Math.min(100,(1-(Date.now()/1000-a.last_seen)/600)*100));
+  var _dnm=(a.name&&String(a.name).trim())?String(a.name).trim():"";
+  var _demoji=(isA?(a.virtual?"🔵":"🔦"):"🚢");
+  document.getElementById("det-title").textContent=_demoji+" "+(_dnm||("MMSI "+a.mmsi));
+  var _mel=document.getElementById("det-mmsi"); if(_mel) _mel.textContent=_dnm?("MMSI "+a.mmsi):(isA?"":"🕐 선박정보 수신 대기");
+  var badge=document.getElementById("det-badge");
+  if(badge){ badge.textContent=isA?((a.virtual?"🔵 ":"🔦 ")+aname_en(a.aton_type)+(a.virtual?" (Virtual)":"")):("🚢 "+stype_en(a.ship_type));
+    badge.style.cssText="background:"+(isA?(a.virtual?"rgba(155,109,255,.15)":"rgba(240,165,0,.15)"):"rgba(0,212,255,.12)")+";color:"+(isA?(a.virtual?"#9b6dff":"#f0a500"):"#00d4ff"); }
+  var body=document.getElementById("det-body");
+  body.innerHTML="";
+  // 신선도 바
+  var fb=document.createElement("div");fb.className="fresh-bar";fb.innerHTML='<div class="ff" style="width:'+pct+'%;background:'+fr+'"></div>';body.appendChild(fb);
+  // 경보
+  if(isA&&a.off_position){var al=document.createElement("div");al.className="alert-box";al.textContent="⚠ 위치이탈 감지 (Off Position)";body.appendChild(al);}
+  if(isA&&a.virtual){var vb=document.createElement("div");vb.className="virtual-box";vb.innerHTML="🔵 가상 항로표지 (Virtual AtoN)<br><small>물리적 장치 없음 — 소프트웨어 생성 표지</small>";body.appendChild(vb);}
+
+  var utcStr=utcLabel(a.utc_sec);
+  var catStr=a.aton_cat||acat(a.aton_type);
+
+  if(isA){
+    // 탭 3개 구조
+    var tabWrap=document.createElement("div");
+    tabWrap.innerHTML='<div class="det-tabs">'
+      +'<button class="det-tab active" id="det-tab-msg21" onclick="switchDetTab(\'msg21\',\''+a.mmsi+'\')">📡 MT21<br><small>항로표지보고</small></button>'
+      +'<button class="det-tab" id="det-tab-msg6" onclick="switchDetTab(\'msg6\',\''+a.mmsi+'\')">🔧 MT6<br><small>상태정보</small></button>'
+      +'<button class="det-tab" id="det-tab-msg8" onclick="switchDetTab(\'msg8\',\''+a.mmsi+'\')">🌊 MT8<br><small>해양기상</small></button>'
+      +'</div>'
+      +'<div class="det-tab-pane active" id="det-pane-msg21"><div id="msg21-content"></div></div>'
+      +'<div class="det-tab-pane" id="det-pane-msg6"><div id="msg6-pane"><div class="no-data"><button class="load-btn-sm" onclick="showMsg6Tab(\''+a.mmsi+'\')">📂 MT6 상태정보 불러오기</button></div></div></div>'
+      +'<div class="det-tab-pane" id="det-pane-msg8"><div id="msg8-pane"><div class="no-data"><button class="load-btn-sm" onclick="showMsg8Tab(\''+a.mmsi+'\')">📂 MT8 해양기상 불러오기</button></div></div></div>';
+    body.appendChild(tabWrap);
+    var mc=document.getElementById("msg21-content");
+    // 위치 정보
+    mc.innerHTML+=makeSection("📍 위치 정보 (Location)","var(--amber)",[
+      makeField("위도 (Latitude)",fmtLat(a.lat)),
+      makeField("경도 (Longitude)",fmtLon(a.lon)),
+      makeField("위치정확도 (Position Accuracy)",a.accuracy==1?"고정밀 (≤10m, DGNSS)":"저정밀 (>10m)",a.accuracy==1?"var(--green)":"var(--dim)"),
+      makeField("측위장치 (EPFD)",(a.epfd!=null?(a.epfd+"("+(EPFD_T[a.epfd]||a.epfd_name||"미정의")+")"):"-")),
+      makeField("UTC Second (GNSS Fix)",utcStr),
+      makeField("위치상태 (Position Status)",a.off_position?"⚠ 이탈":"✅ 정상위치",a.off_position?"var(--red)":"var(--green)"),
+    ]);
+    // 표지 정보
+    mc.innerHTML+=makeSection("🔦 표지 정보 (AtoN Information)","var(--amber)",[
+      makeField("MMSI",a.mmsi),
+      makeField("구분 (Type)",a.virtual?"🔵 가상(Virtual AtoN)":"🔦 물리(Physical AtoN)",a.virtual?"var(--violet)":"var(--amber)"),
+      makeField("분류 (Category)",catStr==="고정"?"📌 고정표지":catStr==="부유"?"🌊 부유표지":"📋 기타"),
+      makeField("유형 (AtoN Type)",a.aton_type+"("+(a.aton_name_en||aname_en(a.aton_type))+", "+(a.aton_name_ko||aname(a.aton_type))+")"),
+    ]);
+    // 크기
+    mc.innerHTML+=makeSection("📐 크기 (Dimension)","var(--cyan)",[
+      makeField("Dim A (선수 거리 / Bow)",a.dim_a!=null?a.dim_a+" m":"미제공"),
+      makeField("Dim B (선미 거리 / Stern)",a.dim_b!=null?a.dim_b+" m":"미제공"),
+      makeField("Dim C (좌현 / Port)",a.dim_c!=null?a.dim_c+" m":"미제공"),
+      makeField("Dim D (우현 / Starboard)",a.dim_d!=null?a.dim_d+" m":"미제공"),
+      (a.dim_a!=null&&a.dim_b!=null?makeField("전체길이 (A+B)",(a.dim_a+a.dim_b)+" m"):""),
+    ]);
+    // AIS 수신 정보
+    mc.innerHTML+=makeSection("📡 AIS 수신 정보","var(--cyan)",[
+      makeField("Message Type","MT21("+(MSG_TYPE_DESC[21]||"")+")","var(--amber)"),
+      makeField("RAIM",a.raim?"사용중":"미사용"),
+      makeField("운용모드 (Operation Mode)",a.assigned?"지정모드":"자율연속모드"),
+      makeField("AtoN Status (Raw)",(function(){var v=a.aton_status||0;return "0x"+v.toString(16).padStart(2,"0").toUpperCase()+"(0b"+v.toString(2).padStart(8,"0")+")";})()),
+      makeField("최근 수신 (Last Received)",ago(a.last_seen),fr),
+    ]);
+    // AtoN Status 비트 분석
+    var sd=document.createElement("div");sd.className="section";
+    sd.innerHTML='<div class="sec-title" style="color:var(--red)">⚠ AtoN Status 비트 분석</div>'
+    +'<div style="font-size:9px;color:var(--dim);line-height:1.6;padding:5px 14px 5px 12px;margin:0 0 2px;border-left:3px solid var(--amber)">'
+    +'* IALA R0126은 등명기 및 RACON 등의 실제 상태신호가 AIS와 자동 연계된 경우 Page ID 식별자를 111(7)로 셋팅, '
+    +'자동 연계기능이 구성되지 않아 실시간 상태감시가 불가능한 경우 이용자 혼란방지를 위해 국제표준 Default 값(00000000) 적용'
+    +'</div>'
+    +renderAtonStatusBits(a.aton_status);
+    mc.appendChild(sd);
+    // 수신 기록
+    var hd=document.createElement("div");hd.className="section";
+    hd.innerHTML='<div class="sec-title" style="color:var(--violet)">📜 MSG21 수신 기록 (최근 50회)</div>'
+      +'<div id="hist-section"><div style="padding:12px;text-align:center"><button class="load-btn-sm" onclick="showHistorySection(\''+a.mmsi+'\')">📂 수신 기록 불러오기</button></div></div>';
+    mc.appendChild(hd);
+  } else {
+    // 선박
+    body.innerHTML+=makeSection("📍 위치 / 항법 (Navigation)","var(--cyan)",[
+      makeField("위도 (Latitude)",fmtLat(a.lat)),
+      makeField("경도 (Longitude)",fmtLon(a.lon)),
+      makeField("속도 (SOG)",(a.sog==null||a.sog>=102.3)?"미제공":a.sog+" kn"),
+      makeField("침로 (COG)",(a.cog==null||a.cog>=360)?"미제공":a.cog+"°"),
+      makeField("선수방위 (Heading)",(a.heading==null||a.heading>=360)?"미제공":a.heading+"°"),
+      makeField("항법상태 (Nav Status)",NAV_S[a.nav_status]||"-"),
+    ]);
+    body.innerHTML+=makeSection("🚢 선박 정보 (Vessel)","var(--cyan)",[
+      makeField("MMSI",a.mmsi),
+      makeField("선박유형 (Ship Type)",stype(a.ship_type)),
+      (a.name?makeField("선박명 (Name)",a.name):""),
+      (a.destination&&a.destination.trim()?makeField("목적지 (Destination)",a.destination):""),
+      makeField("Message Type","MT"+a.msg_type+"("+(MSG_TYPE_DESC[a.msg_type]||"")+")","var(--amber)"),
+      makeField("최근 수신 (Last Received)",ago(a.last_seen),fr),
+    ]);
+  }
+  var cb=document.createElement("button");cb.className="close-b";cb.textContent="✕ 선택 해제";cb.onclick=closeDetail;body.appendChild(cb);
+}
+
+// ── 목록 ──────────────────────────────────────────────────────────
+function _subRow(a,tab,icon,label,color){
+  return '<div class="ship-row" style="border-left:4px solid '+color+';padding-left:24px;background:rgba(0,0,0,.02)" onclick="openDetail(\''+a.mmsi+'\');if(window.switchDetTab)switchDetTab(\''+tab+'\',\''+a.mmsi+'\')">'
+    +'<div class="row-icon" style="background:rgba(0,0,0,.06);width:28px;height:28px;font-size:14px">'+icon+'</div>'
+    +'<div style="flex:1;min-width:0"><div class="row-meta" style="font-size:12px"><span style="font-weight:800;color:'+color+'">'+label+'</span> &nbsp;'+(a.name||("MMSI "+a.mmsi))+'</div></div>'
+    +'<div class="row-right"><div class="row-time" style="color:'+color+';font-weight:700">보기 ›</div></div>'
+    +'</div>';
+}
+function renderList(){
+  var items=getFiltered();
+  document.getElementById("panelCnt").textContent=items.length;
+  document.getElementById("panelTitle").textContent=filt==="vessel"?"선박":filt==="physical"?"물리표지":filt==="virtual"?"가상표지":filt==="stale"?"미수신":"전체";
+  if(!items.length){document.getElementById("list-body").innerHTML='<div style="padding:40px;text-align:center;color:var(--dim)">수신된 항목 없음</div>';return;}
+  document.getElementById("list-body").innerHTML=items.map(function(a){
+    var isA=a.msg_type===21,fr=stale(a.last_seen),isSel=sel&&sel.mmsi===a.mmsi;
+    // 항목 유형별 색상 정의
+    var nameColor,typeColor,typeTag,bgIcon,leftBorder;
+    if(isA){
+      if(a.virtual){
+        nameColor="#7c3aed";typeColor="#7c3aed";
+        typeTag="가상표지(MT21)";
+        bgIcon="rgba(124,58,237,.1)";leftBorder="4px solid #7c3aed";
+      }else{
+        nameColor="#b45309";typeColor="#b45309";
+        typeTag="물리표지(MT21)";
+        bgIcon="rgba(180,83,9,.1)";leftBorder="4px solid #b45309";
+      }
+    }else{
+      nameColor="#0f172a";typeColor="#0369a1";
+      typeTag="선박(MT"+a.msg_type+")";
+      bgIcon="rgba(3,105,161,.1)";leftBorder="4px solid #0369a1";
+    }
+    var _row='<div class="ship-row'+(isSel?" sel":"")
+      +'" style="border-left:'+leftBorder+'" onclick="openDetail(\''+a.mmsi+'\');if('+!!a.lat+')map.panTo(['+a.lat+','+a.lon+'])">'
+      +'<div class="row-icon" style="background:'+bgIcon+'">'+(isA?(a.virtual?"🔵":"🔦"):"🚢")+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="row-name" style="color:'+nameColor+'">'+(a.name||"MMSI:"+a.mmsi)+'</div>'
+      +'<div class="row-meta"><span style="font-weight:700;color:'+typeColor+'">'+typeTag+'</span>'
+      +' &nbsp;'+a.mmsi+(isA?" · "+aname_en(a.aton_type):" · "+stype_en(a.ship_type))+'</div>'
+      +'<div class="row-meta">'+fmtLatPlain(a.lat)+' '+fmtLonPlain(a.lon)+(isA||!a.sog?"":"  · "+a.sog+"kn")+'</div>'
+      +'</div>'
+      +'<div class="row-right"><div class="row-time">'+ago(a.last_seen)+'</div>'
+      +'<div class="row-dot" style="background:'+fr+'"></div>'
+      +(isA&&a.off_position?'<div style="color:var(--red);font-size:9px">⚠이탈</div>':"")
+      +'</div></div>';
+    var _sub="";
+    if(isA){ if(a.has_msg6)_sub+=_subRow(a,"msg6","🔧","MT6 상태정보","#0891b2"); if(a.has_msg8)_sub+=_subRow(a,"msg8","🌊","MT8 해양기상","#059669"); }
+    return _row+_sub;
+  }).join("");
+}
+
+
+// ── NMEA ──────────────────────────────────────────────────────────
+function getMT(raw){try{var b=raw.split(",")[5];var v=b.charCodeAt(0)-48;return(v>39?v-8:v)&63;}catch{return 0;}}
+function stopRawView(){
+  if(rawInterval){clearInterval(rawInterval);rawInterval=null;}
+  var rb=document.getElementById('raw-body'); if(rb)rb.style.display='none';
+  var nb=document.getElementById('nmea-body'); if(nb&&activeTab==='nmea')nb.style.display='block';
+}
+function toggleRawView(){
+  rawView=!rawView;
+  var btn=document.getElementById('raw-toggle-btn');
+  var rb=document.getElementById('raw-body'), nb=document.getElementById('nmea-body');
+  if(rawView){
+    if(btn){btn.textContent='NMEA';btn.style.color='#7fd6ff';}
+    if(rb)rb.style.display='block'; if(nb)nb.style.display='none';
+    rawInterval=setInterval(function(){
+      fetch(SERVER+'/raw.json',{signal:AbortSignal.timeout(3000)}).then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.raw)return;
+        var lines=d.raw; var mc={};
+        lines.forEach(function(l){var p=l.split(',');if(p.length>=6){var v=p[5].charCodeAt(0)-48;var mt=(v>39?v-8:v);mc[mt]=(mc[mt]||0)+1;}});
+        var mtStr=Object.keys(mc).sort(function(a,b){return+a-+b;}).map(function(m){return'<span style="color:'+(m=='21'?'#4ade80':m=='6'||m=='8'?'#60a5fa':'#94a3b8')+'">MT'+m+'('+mc[m]+'건)</span>';}).join(' ');
+        var html='<div style="padding:3px 0;margin-bottom:3px;border-bottom:1px solid #1e2a3a;font-size:10px">'+lines.length+'줄 | '+mtStr+'</div>'
+          +lines.slice(0,200).map(function(l){
+            var p=l.split(',');var mt=0;
+            if(p.length>=6){var v=p[5].charCodeAt(0)-48;mt=(v>39?v-8:v);}
+            var col=mt===21?'#4ade80':mt===6||mt===8?'#60a5fa':mt===1||mt===3||mt===18?'#94a3b8':'#475569';
+            return'<div style="color:'+col+'">'+l+'</div>';
+          }).join('');
+        if(rb)rb.innerHTML=html;
+      }).catch(function(){});
+    },2000);
+  } else {
+    if(btn){btn.textContent='원문';btn.style.color='';}
+    stopRawView(); refreshNmea();
+  }
+}
+function refreshNmea(){
+  fetch(SERVER+'/nmea.json',{signal:AbortSignal.timeout(5000)}).then(function(r){return r.json();}).then(function(d){ if(d&&d.nmea)nmea=d.nmea; renderNmea(); }).catch(function(){ renderNmea(); });
+}
+function renderNmea(){
+  var filtered=nmea.filter(function(e){
+    var raw=e.raw||e||"";var tag=e.tag||"";var mt=e.mt||getMT(raw);
+    if(filt==="vessel")  return[1,2,3,5,18,24].includes(mt);
+    if(filt==="physical")return(tag==="aton_physical"||tag==="msg6")||
+      (mt===21&&tag==="aton")||(mt===6)||(mt===8);
+    if(filt==="virtual") return tag==="aton_virtual";
+    if(filt==="stale")   return false;
+    return true;
+  });
+  // MT별 카운트 집계
+  var _all=nmea; var _mtc={};
+  _all.forEach(function(e){ var mt=e.mt||0; _mtc[mt]=(_mtc[mt]||0)+1; });
+  var _mcStr=Object.keys(_mtc).sort(function(a,b){return+a-+b;}).map(function(mt){
+    return '<span style="padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.06);font-size:10px">MT'+mt+'('+_mtc[mt]+'건)</span>';
+  }).join(" ");
+  var legend='<div style="font-size:11px;margin-bottom:4px;padding:2px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+    +'<span style="font-size:10px;color:var(--dim);display:flex;gap:3px;flex-wrap:nowrap;overflow-x:auto">'+(_mcStr||'수신 없음')+'</span>'
+    +'<span style="font-weight:700;color:#b45309">'+filtered.length+'건</span></div>';
+
+  var lines=filtered.slice(0,1000).map(function(e){
+    var raw=e.raw||e||"";var ts=e.ts||"--:--:--";var mt=e.mt||getMT(raw);var tag=e.tag||"";
+    var cls="",icon="",typeLabel="";
+    if([1,2,3].includes(mt)){cls="t1";icon="🚢";typeLabel="Type"+mt+" 선박";}
+    else if(mt===5){cls="t5";icon="📋";typeLabel="MT5 선박정보";}
+    else if([18,24].includes(mt)){cls="t18";icon="⛵";typeLabel="Type"+mt+" ClassB";}
+    else if(mt===21||tag==="aton_physical"||tag==="aton_virtual"||tag==="aton"){
+      if(tag==="aton_virtual"){cls="t21v";icon="🔵";typeLabel="MT21 가상표지";}
+      else{cls="t21p";icon="🔦";typeLabel="MT21 물리표지";}
+    }
+    else if(mt===6||tag==="msg6"){cls="t6";icon="🔧";typeLabel="MT6 상태정보";}
+    else if(mt===8||tag==="msg8"){cls="t8";icon="🌊";typeLabel="MT8 해양기상";}
+    return'<div style="padding:4px 0;border-bottom:1px solid rgba(148,163,184,.2);display:flex;gap:4px;align-items:flex-start">'
+      +'<span style="color:#64748b;min-width:54px;flex-shrink:0;font-size:10px">'+ts+'</span>'
+      +'<span class="'+cls+'" style="min-width:68px;flex-shrink:0;font-size:10px;white-space:nowrap">'+icon+' '+typeLabel+'</span>'
+      +'<span style="flex:1;word-break:break-all;line-height:1.4;font-size:11px;color:#0f172a;font-family:monospace">'+raw+'</span></div>';
+  }).join("");
+  document.getElementById("nmea-body").innerHTML=legend+(lines||'<div class="no-data">해당 조건의 NMEA 없음</div>');
+}
+
+// CSS 인라인으로 t1 등 클래스
+var nstyle=document.createElement('style');
+nstyle.textContent='.t1{color:#15803d;font-weight:600}.t5{color:#0369a1;font-weight:600}.t18{color:#6d28d9;font-weight:600}.t21p{color:#b45309;font-weight:700}.t21v{color:#7c3aed;font-weight:700}.t6{color:#0891b2;font-weight:700}.t8{color:#059669;font-weight:700}';
+document.head.appendChild(nstyle);
+
+// ── 전체 렌더 ─────────────────────────────────────────────────────
+function renderAll(){
+  window._d={};
+  [].concat(Object.values(vessels),Object.values(atons)).forEach(function(a){window._d[a.mmsi]=a;});
+  var all=[].concat(Object.values(vessels),Object.values(atons));
+  // 통계바(st-v/st-p/st-a/st-m6/st-m8)는 updateStats()에서 채웁니다.
+  // (과거엔 여기서 존재하지 않는 sV/sP/sA 요소를 참조해 매 폴링마다 예외가 발생 →
+  //  상단 상태가 '대기'로 뒤집히고 renderList()에 도달하지 못해 목록 카운트가 0이 됐음)
+  renderList();
+  try{ updateFilterCounts(); }catch(e){}
+  if(activeTab==="nmea")refreshNmea();
+  if(sel){var u=window._d[sel.mmsi];if(u)sel=u;}
+}
+
+// ── 폴링 ──────────────────────────────────────────────────────────
+async function poll(){
+  var d;
+  // 1) 네트워크/수신 단계 — 여기서 실패해야만 '대기'로 표시
+  try{
+    var r=await fetch(SERVER+"/data.json",{signal:AbortSignal.timeout(5000)});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    d=await r.json();
+  }catch(e){
+    checkAisCatcher(false);
+    return;
+  }
+  // 2) 렌더링 단계 — 여기서 예외가 나도 '대기'로 뒤집지 않음(수신은 정상이므로)
+  try{
+    vessels={};atons={};
+    (d.vessels||[]).forEach(function(v){if(v.lat&&v.lat!==0)vessels[v.mmsi]=v;});
+    (d.atons||[]).forEach(function(a){if(a.lat&&a.lat!==0)atons[a.mmsi]=a;});
+    nmea=d.nmea||[];
+    window._m6count=d.msg6_count||0;
+    window._m8count=d.msg8_count||0;
+    window._atons=atons;
+    updateStats(d.stats||{});
+    if(!firstCenter){
+      var all2=[].concat(Object.values(vessels),Object.values(atons));
+      if(all2.length){map.setView([all2.reduce(function(s,a){return s+a.lat;},0)/all2.length,all2.reduce(function(s,a){return s+a.lon;},0)/all2.length],13);firstCenter=true;}
+    }
+    updateMarkers();renderAll();
+    try{ evalAlerts(); }catch(e){ console.error("alert",e); }
+  }catch(e){
+    console.error("render 오류:",e);
+  }
+}
+
+// ── 초기화 ────────────────────────────────────────────────────────
+setTimeout(function(){
+  map.invalidateSize();
+  poll();
+  pollTimer=setInterval(poll,3000);
+},200);
+
+// ── 실시간 RF 모니터 ──
+var _livrfTimer=null;
+function startLiveRf(){ if(_livrfTimer)return; pollLiveRf(); _livrfTimer=setInterval(pollLiveRf,2000); }
+function stopLiveRf(){ if(_livrfTimer){clearInterval(_livrfTimer);_livrfTimer=null;} }
+function mtName(mt){ return ({1:'MT1',2:'MT2',3:'MT3',5:'MT5',6:'MT6',8:'MT8',18:'MT18',21:'MT21',24:'MT24'})[mt]||('MT'+mt); }
+// AtoN Type 0~31 + 고정/유동 분류 (ITU-R M.1371 / 자료 기준). g: fixed/float/other
+var ATON_TYPES=[
+ {c:0,g:'other',ko:'미지정',en:'Default, Type not specified'},
+ {c:1,g:'other',ko:'기준점',en:'Reference point'},
+ {c:2,g:'other',ko:'레이콘(RACON)/MAtoN',en:'RACON or MAtoN'},
+ {c:3,g:'fixed',ko:'고정 구조물',en:'Fixed structure'},
+ {c:4,g:'float',ko:'긴급 난파선 표시 부표',en:'Emergency Wreck Marking Buoy'},
+ {c:5,g:'fixed',ko:'등화 - 무섹터',en:'Light, without sectors'},
+ {c:6,g:'fixed',ko:'등화 - 섹터',en:'Light, with sectors'},
+ {c:7,g:'fixed',ko:'전방 선도등',en:'Leading Light Front'},
+ {c:8,g:'fixed',ko:'후방 선도등',en:'Leading Light Rear'},
+ {c:9,g:'fixed',ko:'북방위 표지',en:'Beacon, Cardinal N'},
+ {c:10,g:'fixed',ko:'동방위 표지',en:'Beacon, Cardinal E'},
+ {c:11,g:'fixed',ko:'남방위 표지',en:'Beacon, Cardinal S'},
+ {c:12,g:'fixed',ko:'서방위 표지',en:'Beacon, Cardinal W'},
+ {c:13,g:'fixed',ko:'좌현측 표지',en:'Beacon, Port hand'},
+ {c:14,g:'fixed',ko:'우현측 표지',en:'Beacon, Starboard hand'},
+ {c:15,g:'fixed',ko:'우선항로 좌현측 표지',en:'Beacon, Preferred Ch port hand'},
+ {c:16,g:'fixed',ko:'우선항로 우현측 표지',en:'Beacon, Preferred Ch stbd hand'},
+ {c:17,g:'fixed',ko:'고립장애 표지',en:'Beacon, Isolated danger'},
+ {c:18,g:'fixed',ko:'안전수역 표지',en:'Beacon, Safe water'},
+ {c:19,g:'fixed',ko:'특수표지',en:'Beacon, Special mark'},
+ {c:20,g:'float',ko:'북방위 표지',en:'Cardinal Mark N'},
+ {c:21,g:'float',ko:'동방위 표지',en:'Cardinal Mark E'},
+ {c:22,g:'float',ko:'남방위 표지',en:'Cardinal Mark S'},
+ {c:23,g:'float',ko:'서방위 표지',en:'Cardinal Mark W'},
+ {c:24,g:'float',ko:'좌현측 표지',en:'Port hand Mark'},
+ {c:25,g:'float',ko:'우현측 표지',en:'Starboard hand Mark'},
+ {c:26,g:'float',ko:'우선항로 좌현측 표지',en:'Preferred Channel Port hand'},
+ {c:27,g:'float',ko:'우선항로 우현측 표지',en:'Preferred Channel Stbd hand'},
+ {c:28,g:'float',ko:'고립장애 표지',en:'Isolated danger'},
+ {c:29,g:'float',ko:'안전수역 표지',en:'Safe Water'},
+ {c:30,g:'float',ko:'특수표지',en:'Special Mark'},
+ {c:31,g:'float',ko:'등선/LANBY/해상구조물',en:'Light Vessel / LANBY / Rigs'}
+];
+function atonTypeByCode(c){for(var i=0;i<ATON_TYPES.length;i++)if(ATON_TYPES[i].c===c)return ATON_TYPES[i];return ATON_TYPES[0];}
+// MT별 아이콘·색 (NMEA 탭과 동일 체계로 통일) → {icon,color,label}
+function mtMeta(mt,tag){
+  tag=tag||'';
+  if([1,2,3].includes(mt))   return{icon:'🚢',color:'#15803d',label:'MT'+mt};
+  if(mt===5)                 return{icon:'📋',color:'#0369a1',label:'MT5'};
+  if([18,24].includes(mt))   return{icon:'⛵',color:'#6d28d9',label:'MT'+mt};
+  if(mt===21||tag.indexOf('aton')===0){
+    if(tag==='aton_virtual') return{icon:'🔵',color:'#7c3aed',label:'MT21가상'};
+    return{icon:'🔦',color:'#b45309',label:'MT21물리'};
+  }
+  if(mt===6||tag==='msg6')   return{icon:'🔧',color:'#0891b2',label:'MT6'};
+  if(mt===8||tag==='msg8')   return{icon:'🌊',color:'#059669',label:'MT8'};
+  return{icon:'📡',color:'var(--dim)',label:'MT'+mt};
+}
+function pwrColor(pwr){ if(pwr>=-10)return'var(--green)'; if(pwr>=-30)return'#ca8a04'; return'var(--red)'; }
+async function pollLiveRf(){
+  try{
+    var r=await fetch('/livrf.json'); var d=await r.json();
+    if(el('livrf-rpm'))el('livrf-rpm').textContent=(d.rpm||0)+' 문/분';
+    var maxEl=el('livrf-max'), infoEl=el('livrf-maxinfo'), bar=el('livrf-bar');
+    if(d.count>0 && d.max_pwr!=null){
+      maxEl.textContent=d.max_pwr+' dB';
+      maxEl.style.color=pwrColor(d.max_pwr);
+      infoEl.textContent='MMSI '+d.max_mmsi+' · '+mtName(d.max_mt)+(d.max_snr!=null?(' · SNR '+d.max_snr+'dB'):'');
+      // 막대: -50dB(0%)~0dB(100%) 매핑
+      var pct=Math.max(0,Math.min(100,(d.max_pwr+50)/50*100));
+      bar.style.width=pct+'%';
+      bar.style.background=(d.max_pwr>=-10)?'linear-gradient(90deg,#16a34a,#22c55e)':(d.max_pwr>=-30?'linear-gradient(90deg,#ca8a04,#eab308)':'linear-gradient(90deg,#dc2626,#ef4444)');
+    } else {
+      maxEl.textContent='--'; maxEl.style.color='var(--dim)';
+      infoEl.textContent='수신 신호 없음'; bar.style.width='0%';
+    }
+    if(el('livrf-avg'))el('livrf-avg').textContent=d.avg_pwr!=null?(d.avg_pwr+'dB'):'-';
+    if(el('livrf-nf'))el('livrf-nf').textContent=d.noise_floor!=null?(d.noise_floor+'dB'):'-';
+    if(el('livrf-snr'))el('livrf-snr').textContent=d.max_snr!=null?(d.max_snr+'dB'):'-';
+    if(el('livrf-cnt'))el('livrf-cnt').textContent=d.count||0;
+    // 채널 A/B 막대 (3A)
+    var chpct=function(v){return Math.max(0,Math.min(100,(v+50)/50*100));};
+    ['a','b'].forEach(function(k){
+      var c=(d.channels||{})[k.toUpperCase()]||{};
+      var bar=el('ch-'+k+'-bar'), val=el('ch-'+k+'-val');
+      if(bar&&val){
+        if(c.cnt>0&&c.max!=null){ bar.style.width=chpct(c.max)+'%'; val.textContent=c.max+'dB ('+c.cnt+')'; val.style.color='var(--text)'; }
+        else{ bar.style.width='0%'; val.textContent='무신호'; val.style.color='var(--dim)'; }
+      }
+    });
+    // 세기순 목록 (30분, peak 기준 정렬)
+    var lst=el('livrf-list'); if(lst){
+      var html='';
+      (d.list||[]).forEach(function(s){
+        var agist=s.age<60?(s.age+'초'):(Math.floor(s.age/60)+'분');
+        var snrTxt=(s.snr!=null)?('<span style="font-size:9px;color:var(--cyan)">SNR '+s.snr+'</span>'):'';
+        var m=mtMeta(s.mt);
+        html+='<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border)">'+
+          '<span style="width:74px"><span style="font-weight:800;font-size:13px;color:'+pwrColor(s.peak)+'">'+s.peak+'</span><span style="font-size:9px;color:var(--dim)">dB</span><br>'+snrTxt+'</span>'+
+          '<span style="font-family:monospace;font-size:12px;flex:1">'+s.mmsi+'</span>'+
+          '<span style="font-size:10px;color:var(--dim);width:20px;text-align:center">'+(s.ch||'-')+'</span>'+
+          '<span style="font-size:10px;width:56px;color:'+m.color+';font-weight:700">'+m.icon+m.label+'</span>'+
+          '<span style="font-size:10px;color:var(--dim);width:38px;text-align:right">'+agist+'</span></div>';
+      });
+      lst.innerHTML=html||'<div style="text-align:center;color:var(--dim);font-size:11px;padding:8px">최근 30분 내 수신 없음</div>';
+    }
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  AtoN 설정 탭 (Step 0): IEC62320/Message21 인코더 + 미리보기 + 자기검증
+//  ※ 전송 없음. Talker ID/Baud/ACK 등 Akari-3S 실측값은 Adapter로 분리(미확정)
+// ═══════════════════════════════════════════════════════════════════
+var CFG_ENG=(function(){
+  function s6c(v){return String.fromCharCode(v<40?v+48:v+56);}
+  function c6(c){var v=c.charCodeAt(0)-48;if(v>40)v-=8;return v&0x3f;}
+  function bitsToPayload(bits){var fill=(6-(bits.length%6))%6;var p=bits+'0'.repeat(fill),o='';for(var i=0;i<p.length;i+=6)o+=s6c(parseInt(p.substr(i,6),2));return{payload:o,fill:fill};}
+  function payloadToBits(p,fill){var b='';for(var i=0;i<p.length;i++)b+=c6(p[i]).toString(2).padStart(6,'0');if(fill>0)b=b.slice(0,b.length-fill);return b;}
+  function u2b(v,n){v=Math.round(v);if(v<0)v=0;return(v>>>0).toString(2).padStart(n,'0').slice(-n);}
+  function i2b(v,n){v=Math.round(v);if(v<0)v=(Math.pow(2,n))+v;return(v>>>0).toString(2).padStart(n,'0').slice(-n);}
+  function bu(b,a,z){return parseInt(b.substring(a,z),2)||0;}
+  function bi(b,a,z){var v=parseInt(b.substring(a,z),2)||0,n=z-a;if(v>=Math.pow(2,n-1))v-=Math.pow(2,n);return v;}
+  var AC="@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?";
+  function n2b(name,mx){name=(name||'').toUpperCase();var b='';for(var i=0;i<mx;i++){var ch=i<name.length?name[i]:'@';var x=AC.indexOf(ch);if(x<0)x=0;b+=u2b(x,6);}return b;}
+  function b2n(b){var s='';for(var i=0;i+6<=b.length;i+=6){s+=AC[bu(b,i,i+6)]||'';}return s.replace(/@+$/,'').trim();}
+  function encodeMsg21(c){
+    var vb=(c.stationMode==='VIRTUAL')?1:0;
+    var nm=(c.name||'').toUpperCase(),nMain=nm.substring(0,20),nExt=nm.substring(20,34);
+    var b='';
+    b+=u2b(21,6); b+=u2b(c.repeat||0,2); b+=u2b(parseInt(c.mmsi,10)||0,30);
+    b+=u2b(c.atonType||0,5); b+=n2b(nMain,20); b+=u2b(c.posAccuracy?1:0,1);
+    b+=i2b(Math.round((c.lon||0)*600000),28); b+=i2b(Math.round((c.lat||0)*600000),27);
+    b+=u2b(c.dimA||0,9); b+=u2b(c.dimB||0,9); b+=u2b(c.dimC||0,6); b+=u2b(c.dimD||0,6);
+    b+=u2b(c.epfs||0,4); b+=u2b(c.utcSec!=null?c.utcSec:60,6); b+=u2b(c.offPosition?1:0,1);
+    b+=u2b(c.atonStatus||0,8); b+=u2b(c.raim?1:0,1); b+=u2b(vb,1); b+=u2b(c.assigned?1:0,1); b+=u2b(0,1);
+    if(nExt.length>0)b+=n2b(nExt,nExt.length);
+    var r=bitsToPayload(b); return{bits:b,payload:r.payload,fill:r.fill};
+  }
+  function decodeMsg21(p,fill){
+    var b=payloadToBits(p,fill);
+    var g={msgType:bu(b,0,6),mmsi:String(bu(b,8,38)),atonType:bu(b,38,43),
+      posAccuracy:b.length>=164?bu(b,163,164):0,
+      lon:b.length>=192?bi(b,164,192)/600000:0, lat:b.length>=219?bi(b,192,219)/600000:0,
+      dimA:b.length>=228?bu(b,219,228):0, dimB:b.length>=237?bu(b,228,237):0,
+      dimC:b.length>=243?bu(b,237,243):0, dimD:b.length>=249?bu(b,243,249):0,
+      epfs:b.length>=253?bu(b,249,253):0, utcSec:b.length>=259?bu(b,253,259):0,
+      offPosition:b.length>=260?bu(b,259,260):0, atonStatus:b.length>=268?bu(b,260,268):0,
+      virtual:b.length>=270?bu(b,269,270):0};
+    var name=b2n(b.substring(43,Math.min(163,b.length)));
+    if(b.length>272)name+=b2n(b.substring(272));
+    g.name=name.trim(); return g;
+  }
+  function cksum(body){var cs=0;for(var i=0;i<body.length;i++)cs^=body.charCodeAt(i);return cs.toString(16).toUpperCase().padStart(2,'0');}
+  function toAIVDM(p,fill,ch){var body='AIVDM,1,1,,'+(ch||'A')+','+p+','+fill;return'!'+body+'*'+cksum(body);}
+  function mkSent(t,f,fields){var body=t+f+','+fields.join(',');return'$'+body+'*'+cksum(body);}
+  function eLat(dd){var h=dd<0?'S':'N';dd=Math.abs(dd);var d=Math.floor(dd),m=(dd-d)*60,mm=m.toFixed(4).split('.');return{v:String(d).padStart(2,'0')+mm[0].padStart(2,'0')+'.'+mm[1],h:h};}
+  function eLon(dd){var h=dd<0?'W':'E';dd=Math.abs(dd);var d=Math.floor(dd),m=(dd-d)*60,mm=m.toFixed(4).split('.');return{v:String(d).padStart(3,'0')+mm[0].padStart(2,'0')+'.'+mm[1],h:h};}
+  function eDim(a,b,c,d){return String(a).padStart(3,'0')+String(b).padStart(3,'0')+String(c).padStart(2,'0')+String(d).padStart(2,'0');}
+  function rel(m){return m==='VIRTUAL'?'V':(m==='SYNTHETIC'?'P':'R');}
+  // ── IEC 62320-2 PI 빌더 (실제 장비 BNT AtoN AIS 로그 기준 확정판) ──
+  function p2(v){return String(v).padStart(2,'0');}
+  function p4(v){return String(v).padStart(4,'0');}
+  function virtNum(m){return m==='VIRTUAL'?1:(m==='SYNTHETIC'?2:0);}
+  function aidRel(m){return m==='VIRTUAL'?'V':(m==='SYNTHETIC'?'P':'R');}
+  // AID: 물리=자기등록. 가상=부모(Real) 밑에 가상MMSI 등록(relation V)
+  function buildAID(c){
+    var isV=(c.stationMode==='VIRTUAL' && c.parentMmsi);
+    var first = isV ? c.parentMmsi : c.mmsi;
+    var affect = c.affectMmsi || c.mmsi;
+    var rel = c.relation || aidRel(c.stationMode);
+    return mkSent(c.talker,'AID',[first,(c.aidIndex!=null?c.aidIndex:''),affect,rel,c.status||'C']);
+  }
+  // ACE(기본): MMSI,statusBits(hex2),offPos임계(4),ack,offPosBehav,synchLost,name,dimension,status
+  function buildACE(c){
+    var isV=(c.stationMode==='VIRTUAL');   // 가상표지: 상태/거동 필드 비움 (실장비 로그 기준)
+    var sb=isV?'':(((c.atonStatus||0)&0xff)).toString(16).toUpperCase().padStart(2,'0');
+    var dim=String(c.dimA||0).padStart(3,'0')+String(c.dimB||0).padStart(3,'0')+p2(c.dimC||0)+p2(c.dimD||0);
+    return mkSent(c.talker,'ACE',[c.mmsi, sb,
+      isV?'':p4(c.offPosThreshold||0),
+      isV?'':(c.ackBehav!=null?c.ackBehav:1),
+      isV?'':(c.offPosBehav!=null?c.offPosBehav:0),
+      isV?'':(c.synchLost!=null?c.synchLost:0),
+      (c.name||'').toUpperCase(), dim, c.status||'C']);}
+  // ACF(상세): MMSI,EPFS,lat,NS,lon,EW,posAcc,Rx1,Rx2,Tx1,Tx2,power,type,virtual(num),status
+  function buildACF(c){var la=eLat(c.lat),lo=eLon(c.lon);
+    return mkSent(c.talker,'ACF',[c.mmsi,c.epfs||0,la.v,la.h,lo.v,lo.h,c.posAccuracy?1:0,c.rxCh1||2087,c.rxCh2||2088,c.txCh1||2087,c.txCh2||2088,c.power||0,p2(c.atonType||0),virtNum(c.stationMode),c.status||'C']);}
+  // AAR(스케줄): MMSI,msgID(2),index(2),[ch1 h,m,slot4,interval(분)],TDMA,[ch2 h,m,slot4,interval(분)],status
+  function buildAAR(c,msgID,index,ch,hour,min,slot,intervalMin,tdma){tdma=(tdma!=null)?tdma:1;
+    var f=[c.mmsi,p2(msgID),p2(index)];
+    if(ch===0)      f.push(p2(hour),p2(min),p4(slot),intervalMin,tdma,p2(hour),p2(min),p4(slot),intervalMin); // 양채널 동일
+    else if(ch===1) f.push(p2(hour),p2(min),p4(slot),intervalMin,tdma,'','','','');
+    else            f.push('','','','',tdma,p2(hour),p2(min),p4(slot),intervalMin);
+    f.push(c.status||'C');
+    return mkSent(c.talker,'AAR',f);}
+  function buildQuery(c,fmt){return mkSent(c.talker,'AIQ',[fmt]);}
+  return{encodeMsg21:encodeMsg21,decodeMsg21:decodeMsg21,toAIVDM:toAIVDM,buildAID:buildAID,buildACE:buildACE,buildACF:buildACF,buildAAR:buildAAR,buildQuery:buildQuery,eLat:eLat,eLon:eLon};
+})();
+
+// 설정 탭 UI 렌더
+function renderConfigTab(){
+  var host=el('config-panel'); if(!host||host.getAttribute('data-built'))return;
+  host.setAttribute('data-built','1');
+  var fld='display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px';
+  var lab='font-size:11px;color:var(--dim)';
+  host.innerHTML=
+   '<div style="background:var(--panel);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)">'+
+    '<div style="font-weight:800;font-size:13px;color:var(--amber);margin-bottom:4px">⚙️ 항로표지 설정 빌더</div>'+
+    '<div style="font-size:10px;color:var(--dim);margin-bottom:12px;line-height:1.5">설정값 → 표준 Message 21 / IEC 62320-2 문장 생성 + 자기검증. <b style="color:#ca8a04">전송 안 함(미리보기 전용)</b>. 실제 장비 적용은 통신로그 확보 후.</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+      '<div><label style="'+lab+'">MMSI (9자리)</label><input id="cf-mmsi" type="text" maxlength="9" inputmode="numeric" placeholder="994xxxxxx" style="'+fld+'"></div>'+
+      '<div><label style="'+lab+'">국 종류</label><select id="cf-mode" onchange="cfModeChanged()" style="'+fld+'"><option value="PHYSICAL">물리(Physical)</option><option value="SYNTHETIC">합성(Synthetic)</option><option value="VIRTUAL">가상(Virtual)</option></select></div>'+
+    '</div>'+
+    '<div id="cf-virtbox" style="display:none;margin-top:8px;padding:8px;border:1px solid #7c3aed;border-radius:8px;background:rgba(124,58,237,0.06)">'+
+      '<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:4px">🔵 가상표지 — 부모(실제) 장비가 대신 송신</div>'+
+      '<label style="'+lab+'">부모(Real) 장비 MMSI</label><input id="cf-parent" type="text" maxlength="9" inputmode="numeric" placeholder="연결된 실제 장비 MMSI" style="'+fld+'">'+
+      '<div style="font-size:10px;color:var(--dim);margin-top:3px">가상 MMSI(위 MMSI칸, 통상 995…)는 부모와 <b>달라야</b> 합니다. EPFS는 Surveyed 자동. Virtual Flag=1.</div>'+
+    '</div>'+
+    '<div style="margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px">'+
+      '<label style="'+lab+'">AtoN 종류</label>'+
+      '<div style="display:flex;gap:6px;margin-top:4px">'+
+        '<button id="tg-fixed" onclick="cfTypeGroup(\'fixed\')" style="flex:1;padding:7px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">고정표지 Fixed</button>'+
+        '<button id="tg-float" onclick="cfTypeGroup(\'float\')" style="flex:1;padding:7px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">유동표지 Floating</button>'+
+        '<button id="tg-other" onclick="cfTypeGroup(\'other\')" style="flex:0 0 auto;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--dim);font-size:12px;cursor:pointer">기타</button>'+
+      '</div>'+
+      '<select id="cf-typedetail" onchange="cfTypeChanged()" style="'+fld+'"></select>'+
+      '<div style="font-size:10px;color:var(--dim);margin-top:4px">AIS Type Code: <b id="cf-typecode" style="color:var(--cyan)">0</b> <span id="cf-typeen" style="color:var(--dim)"></span></div>'+
+    '</div>'+
+    '<div style="margin-top:8px"><label style="'+lab+'">명칭 (영문 대문자·숫자·공백, 권장 20자·최대 34자)</label><input id="cf-name" type="text" maxlength="34" placeholder="POHANG NEW PORT NB1" oninput="cfNameCheck()" style="'+fld+'"><div id="cf-namehint" style="font-size:10px;color:var(--dim);margin-top:2px">0 / 34자</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">'+
+      '<div><label style="'+lab+'">위도 (°, +북/−남)</label><input id="cf-lat" type="number" step="0.000001" placeholder="36.123456" oninput="cfLimitDec(this)" style="'+fld+'"></div>'+
+      '<div><label style="'+lab+'">경도 (°, +동/−서)</label><input id="cf-lon" type="number" step="0.000001" placeholder="129.123456" oninput="cfLimitDec(this)" style="'+fld+'"></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:8px">'+
+      '<div><label style="'+lab+'">Dim A</label><input id="cf-da" type="number" min="0" max="511" value="0" style="'+fld+'"></div>'+
+      '<div><label style="'+lab+'">Dim B</label><input id="cf-db" type="number" min="0" max="511" value="0" style="'+fld+'"></div>'+
+      '<div><label style="'+lab+'">Dim C</label><input id="cf-dc" type="number" min="0" max="63" value="0" style="'+fld+'"></div>'+
+      '<div><label style="'+lab+'">Dim D</label><input id="cf-dd" type="number" min="0" max="63" value="0" style="'+fld+'"></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px">'+
+      '<div><label style="'+lab+'">EPFS</label><select id="cf-epfs" style="'+fld+'"><option value="0">0 미정의</option><option value="1">1 GPS</option><option value="7">7 Surveyed</option><option value="15">15 내부GNSS</option></select></div>'+
+    '</div>'+
+    // AtoN Status 8비트 (표준 콤보 방식, 자료 §8)
+    '<div style="margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px">'+
+      '<label style="'+lab+'">AtoN Status (8비트)</label>'+
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-top:4px">'+
+        [7,6,5,4,3,2,1,0].map(function(b){return '<label style="font-size:10px;color:var(--text);display:flex;align-items:center;gap:2px"><input type="checkbox" id="cf-sb'+b+'" onchange="cfStatusBits()"> BIT'+b+'</label>';}).join('')+
+      '</div>'+
+      '<div style="font-size:10px;color:var(--dim);margin-top:4px">2진수 <b id="cf-sbbin" style="color:var(--cyan);font-family:monospace">00000000</b> = HEX <b id="cf-sbhex" style="color:var(--cyan)">00</b> = <b id="cf-sbdec" style="color:var(--cyan)">0</b></div>'+
+    '</div>'+
+    '<div style="margin-top:8px"><label style="'+lab+'"><input id="cf-acc" type="checkbox" style="vertical-align:middle"> 위치정확도 High (≤10m, DGNSS)</label></div>'+
+    // Off-position: 유동표지만 활성 (자료 §8)
+    '<div id="cf-offbox" style="margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px">'+
+      '<label style="'+lab+'"><input id="cf-off" type="checkbox" onchange="cfOffToggle()" style="vertical-align:middle"> 위치이탈 감시 (Off-position)</label>'+
+      '<div id="cf-offdetail" style="display:none;margin-top:6px">'+
+        '<label style="'+lab+'">이탈 판단 반경 (m)</label><input id="cf-offthr" type="number" min="0" value="100" style="'+fld+'">'+
+        '<div style="font-size:10px;color:var(--dim);margin-top:2px">기준 위치에서 이 반경 초과 시 위치이탈. 부표 흔들림(계류반경) 고려.</div>'+
+      '</div>'+
+      '<div id="cf-offfixed" style="display:none;font-size:10px;color:#ca8a04;margin-top:4px">고정표지는 위치이탈 감시가 적용되지 않습니다 (자동 비활성).</div>'+
+    '</div>'+
+    // ── 방송 스케줄 (CBR) ──
+    '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'+
+      '<div style="font-size:11px;font-weight:800;color:var(--cyan);margin-bottom:6px">방송 스케줄 (CBR) — 메시지별 주기(분)</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
+        '<div><label style="'+lab+'">MT21 (분)</label><input id="cf-per21" type="number" min="1" step="1" value="3" style="'+fld+'"></div>'+
+        '<div id="cf-mt8box"><label style="'+lab+'">MT8 (분)</label><input id="cf-per8" type="number" min="1" step="1" value="3" style="'+fld+'"></div>'+
+      '</div>'+
+      '<div id="cf-mt6box" style="margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:8px">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--cyan);margin-bottom:4px">MT6 (상태정보) — Index별 설정</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'+
+          '<div><label style="'+lab+'">Index1 모니터링/슬립방지 (분)</label><input id="cf-per6i1" type="number" min="1" step="1" value="1" style="'+fld+'"></div>'+
+          '<div><label style="'+lab+'"><input id="cf-per6i2en" type="checkbox" checked onchange="cfI2Toggle()" style="vertical-align:middle"> Index2 원격관리 (분)</label><input id="cf-per6i2" type="number" min="1" step="1" value="10" style="'+fld+'"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">'+
+        '<div><label style="'+lab+'">MT6 수신처 MMSI</label><input id="cf-dest6" type="text" maxlength="9" inputmode="numeric" placeholder="미사용시 공란" style="'+fld+'"></div>'+
+        '<div><label style="'+lab+'">송신방식</label><select id="cf-access" onchange="cfAccessChanged()" style="'+fld+'"><option value="1">Mode B (RATDMA)</option><option value="0">Mode A (FATDMA)</option><option value="2">Mode C (CSTDMA)</option></select></div>'+
+        '<div><label style="'+lab+'">Start Slot <span id="cf-slotlbl" style="color:#ca8a04">배정값</span></label><input id="cf-slot" type="number" min="0" value="0" style="'+fld+'"></div>'+
+      '</div>'+
+      '<div style="font-size:9px;color:#ca8a04;margin-top:4px">MT21=Index0(on-pos), MT6/8=Index1. <b>Mode A</b>=배정슬롯 입력, <b>Mode B/C</b>=빈슬롯 자동(Slot 미사용).</div>'+
+    '</div>'+
+    '<div style="margin-top:10px">'+
+      '<label style="'+lab+'">Talker ID <span style="color:var(--dim)">(자동검출: AI)</span></label><input id="cf-talker" type="text" maxlength="2" value="AI" style="'+fld+'">'+
+      '<div style="font-size:10px;color:var(--dim);margin-top:4px">📡 스케줄(AAR)은 <b>채널 A·B 양쪽 동일</b> 적용됩니다.</div>'+
+    '</div>'+
+    '<button onclick="cfGenerate()" style="width:100%;margin-top:12px;padding:10px;border-radius:8px;background:var(--amber);color:#fff;font-weight:800;font-size:14px;border:none;cursor:pointer">생성 + 자기검증</button>'+
+   '</div>'+
+   // ── 장비 통신 (Step 2-A: 읽기 전용) ──
+   '<div style="background:var(--panel);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)">'+
+     '<div style="font-weight:800;font-size:13px;color:var(--cyan);margin-bottom:4px">📟 장비 통신 (현재값 읽기)</div>'+
+     '<div style="font-size:10px;color:var(--dim);margin-bottom:8px">Query(읽기)만 송신 — 장비 설정을 <b>바꾸지 않음</b>. USB 설정포트 연결 필요.</div>'+
+     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'+
+       '<span style="font-size:11px;color:var(--dim)">통신속도</span>'+
+       '<button id="baud-38400" onclick="cfBaud(38400)" style="flex:1;padding:6px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">38400</button>'+
+       '<button id="baud-115200" onclick="cfBaud(115200)" style="flex:1;padding:6px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-size:12px;font-weight:700;cursor:pointer">115200</button>'+
+     '</div>'+
+     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px">'+
+       '<button onclick="cfQuery(\'AID\')" style="padding:8px 2px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-weight:700;font-size:12px;cursor:pointer">AID 읽기</button>'+
+       '<button onclick="cfQuery(\'ACE\')" style="padding:8px 2px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-weight:700;font-size:12px;cursor:pointer">ACE 읽기</button>'+
+       '<button onclick="cfQuery(\'ACF\')" style="padding:8px 2px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-weight:700;font-size:12px;cursor:pointer">ACF 읽기</button>'+
+       '<button onclick="cfQuery(\'AAR\')" style="padding:8px 2px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-weight:700;font-size:12px;cursor:pointer">AAR 읽기</button>'+
+     '</div>'+
+     '<button onclick="cfLoadFromDevice()" style="width:100%;margin-top:8px;padding:10px;border-radius:7px;background:var(--cyan);color:#fff;font-weight:800;font-size:13px;border:none;cursor:pointer">📥 현재값을 설정폼에 불러오기</button>'+
+     '<div id="cf-loadmsg" style="font-size:10px;color:var(--dim);margin-top:4px"></div>'+
+     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">'+
+       '<span style="font-size:11px;color:var(--dim)">송수신 로그</span>'+
+       '<button onclick="cfClearLog()" style="padding:3px 8px;border-radius:5px;background:transparent;border:1px solid var(--border);color:var(--dim);font-size:10px;cursor:pointer">지우기</button>'+
+     '</div>'+
+     '<div id="cf-commlog" style="margin-top:6px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:10px;background:var(--bg);border-radius:6px;padding:8px">통신 대기 중…</div>'+
+   '</div>'+
+   '<div id="cf-out"></div>';
+  // 초기화: 유동표지 기본, Off/Access/Status 연동
+  cfTypeGroup('float');
+  cfAccessChanged();
+  cfModeChanged();
+  cfNameCheck();
+}
+
+// ── 장비 통신 (Step 2-A: Query 읽기 + 로그) ──
+var _cfCommTimer=null;
+function startCfComm(){ if(_cfCommTimer)return; pollCommLog(); _cfCommTimer=setInterval(pollCommLog,1500); }
+function stopCfComm(){ if(_cfCommTimer){clearInterval(_cfCommTimer);_cfCommTimer=null;} }
+// ── 현재값 불러오기 (장비 응답 → 설정폼 자동 입력) ──
+function _core2(x){var b=x.substring(3,x.lastIndexOf('*'));var p=b.split(',');p.shift();if(p.length)p.pop();return p;}
+function _parseCoordRB(v,hemi){var f=parseFloat(v);if(isNaN(f))return null;var deg=Math.floor(f/100);var min=f-deg*100;var dd=deg+min/60;if(hemi==='S'||hemi==='W')dd=-dd;return Math.round(dd*1e6)/1e6;}
+async function cfLoadFromDevice(){
+  var msg=el('cf-loadmsg'); if(msg)msg.textContent='읽는 중… (AID/ACE/ACF/AAR)';
+  var talker=(el('cf-talker')&&el('cf-talker').value||'AI').toUpperCase();
+  // 각 formatter Query 후 로그 확보
+  await _sendSentence(CFG_ENG.buildQuery({talker:talker},'ACF')); await _sleep(600);
+  await _sendSentence(CFG_ENG.buildQuery({talker:talker},'ACE')); await _sleep(600);
+  await _sendSentence(CFG_ENG.buildQuery({talker:talker},'AAR')); await _sleep(800);
+  var r=await fetch('/config/log'); var d=await r.json(); var log=d.log||[];
+  var applied=[];
+  // 최신 RX 우선 (log는 최신앞)
+  function firstRX(fmt,filter){ for(var i=0;i<log.length;i++){ if(log[i].dir==='RX'&&log[i].line.indexOf('$AN'+fmt)===0){ if(!filter||filter(_core2(log[i].line))) return _core2(log[i].line);}} return null; }
+  // ACF: MMSI,EPFS,lat,NS,lon,EW,acc,Rx1,Rx2,Tx1,Tx2,pwr,type,virtual
+  var acf=firstRX('ACF');
+  if(acf){
+    if(acf[0])window._deviceMmsi=acf[0];   // 연결 장비 실제 MMSI 기억(가상 부모 자동채움용)
+    if(el('cf-mmsi'))el('cf-mmsi').value=acf[0];
+    if(el('cf-epfs'))el('cf-epfs').value=acf[1];
+    var la=_parseCoordRB(acf[2],acf[3]), lo=_parseCoordRB(acf[4],acf[5]);
+    if(la!=null&&el('cf-lat'))el('cf-lat').value=la;
+    if(lo!=null&&el('cf-lon'))el('cf-lon').value=lo;
+    if(el('cf-acc'))el('cf-acc').checked=(acf[6]==='1');
+    var code=parseInt(acf[12],10)||0; var t=atonTypeByCode(code);
+    cfTypeGroup(t.g); if(el('cf-typedetail'))el('cf-typedetail').value=code; cfTypeChanged();
+    var vf=parseInt(acf[13],10)||0; if(el('cf-mode'))el('cf-mode').value=(vf===1?'VIRTUAL':(vf===2?'SYNTHETIC':'PHYSICAL'));
+    applied.push('ACF(위치·종류)');
+  }
+  // ACE: MMSI,statHex,offThr,ack,offB,synch,name,dim
+  var ace=firstRX('ACE');
+  if(ace){
+    var sv=parseInt(ace[1],16)||0; for(var b=0;b<8;b++){var cb=el('cf-sb'+b);if(cb)cb.checked=!!(sv&(1<<b));} cfStatusBits();
+    if(el('cf-name'))el('cf-name').value=ace[6]||''; cfNameCheck();
+    var dim=ace[7]||'0000000000';
+    if(el('cf-da'))el('cf-da').value=parseInt(dim.substr(0,3),10)||0;
+    if(el('cf-db'))el('cf-db').value=parseInt(dim.substr(3,3),10)||0;
+    if(el('cf-dc'))el('cf-dc').value=parseInt(dim.substr(6,2),10)||0;
+    if(el('cf-dd'))el('cf-dd').value=parseInt(dim.substr(8,2),10)||0;
+    applied.push('ACE(이름·치수·상태)');
+  }
+  // AAR: msgID+index별 ch1 interval(초) → 분
+  function aarInt(mid,idx){ for(var i=0;i<log.length;i++){ if(log[i].dir!=='RX')continue; var ln=log[i].line; if(ln.indexOf('$ANAAR')!==0)continue; var p=_core2(ln); if(parseInt(p[1],10)===mid && parseInt(p[2],10)===idx && p[3]!==''&&p[3]!=null){ var sec=parseInt(p[6],10); if(!isNaN(sec))return sec; } } return null; }
+  var i21=aarInt(21,1),i6a=aarInt(6,1),i6b=aarInt(6,2),i8=aarInt(8,1);
+  if(i21!=null&&el('cf-per21'))el('cf-per21').value=Math.round(i21/60);
+  if(i6a!=null&&el('cf-per6i1'))el('cf-per6i1').value=Math.round(i6a/60);
+  if(i6b!=null&&el('cf-per6i2')){el('cf-per6i2').value=Math.round(i6b/60); if(el('cf-per6i2en'))el('cf-per6i2en').checked=true;}
+  if(i8!=null&&el('cf-per8'))el('cf-per8').value=Math.round(i8/60);
+  var aarMsg=[];
+  if(i21!=null)aarMsg.push('MT21:'+i21/60+'분');
+  if(i6a!=null)aarMsg.push('MT6#1:'+i6a/60+'분');
+  if(i6b!=null)aarMsg.push('MT6#2:'+i6b/60+'분');
+  if(i8!=null)aarMsg.push('MT8:'+i8/60+'분');
+  if(aarMsg.length)applied.push('AAR('+aarMsg.join('/')+')');
+  if(msg)msg.textContent=applied.length?('불러옴: '+applied.join(', ')+' — 필요한 값만 수정 후 전송하세요'):'응답 없음 (USB 설정포트·통신속도 확인)';
+  if(msg)msg.style.color=applied.length?'var(--green)':'var(--red)';
+}
+
+async function cfQuery(fmt){
+  var talker=(el('cf-talker')&&el('cf-talker').value||'AI').toUpperCase();
+  var s=CFG_ENG.buildQuery({talker:talker},fmt);
+  try{
+    var r=await fetch('/config/send?s='+encodeURIComponent(s));
+    var d=await r.json();
+    if(!d.ok){ showToast('송신 실패: '+(d.err||'?')+' (USB 설정포트 확인)'); }
+    pollCommLog();
+  }catch(e){ showToast('통신 오류'); }
+}
+async function cfClearLog(){ try{ await fetch('/config/clear'); pollCommLog(); }catch(e){} }
+async function cfBaud(rate){
+  try{
+    var r=await fetch('/config/baud?rate='+rate); var d=await r.json();
+    if(d.ok){ showToast('통신속도 '+rate+' 로 재연결'); 
+      var b1=el('baud-38400'),b2=el('baud-115200');
+      if(b1)b1.style.background=(rate===38400)?'var(--cyan)':'var(--bg)';
+      if(b2)b2.style.background=(rate===115200)?'var(--cyan)':'var(--bg)';
+    } else showToast('전환 실패: '+(d.err||'USB 미연결'));
+  }catch(e){ showToast('통신 오류'); }
+}
+async function pollCommLog(){
+  var host=el('cf-commlog'); if(!host)return;
+  try{
+    var r=await fetch('/config/log'); var d=await r.json();
+    var log=d.log||[];
+    if(log.length===0){ host.innerHTML='<span style="color:var(--dim)">통신 없음 (Query 버튼을 누르세요)</span>'; return; }
+    var html='';
+    log.forEach(function(e){
+      var t=new Date(e.ts*1000); var hh=('0'+t.getHours()).slice(-2),mm=('0'+t.getMinutes()).slice(-2),ss=('0'+t.getSeconds()).slice(-2);
+      var isTx=(e.dir==='TX');
+      var col=isTx?'#ca8a04':'var(--green)';
+      var arrow=isTx?'▶ TX':'◀ RX';
+      html+='<div style="padding:2px 0;border-bottom:1px solid var(--border);word-break:break-all">'+
+        '<span style="color:var(--dim)">'+hh+':'+mm+':'+ss+' </span>'+
+        '<span style="color:'+col+';font-weight:700">'+arrow+'</span> '+
+        '<span>'+e.line+'</span></div>';
+    });
+    host.innerHTML=html;
+  }catch(e){}
+}
+
+// ── 설정 폼 연동 (자료 기준: 고정/유동 → Code·Off-position 자동) ──
+var _cfGroup='float';
+function cfTypeGroup(g){
+  _cfGroup=g;
+  ['fixed','float','other'].forEach(function(x){var b=el('tg-'+x);if(b){b.style.background=(x===g)?'var(--cyan)':'var(--bg)';b.style.color=(x===g)?'#fff':(x==='other'?'var(--dim)':'var(--text)');}});
+  var sel=el('cf-typedetail'); if(!sel)return;
+  var opts=''; ATON_TYPES.filter(function(t){return t.g===g;}).forEach(function(t){opts+='<option value="'+t.c+'">'+t.ko+' ('+t.en+')  ['+t.c+']</option>';});
+  sel.innerHTML=opts;
+  cfTypeChanged();
+}
+function cfTypeChanged(){
+  var sel=el('cf-typedetail'); if(!sel)return;
+  var code=parseInt(sel.value,10)||0; var t=atonTypeByCode(code);
+  if(el('cf-typecode'))el('cf-typecode').textContent=code;
+  if(el('cf-typeen'))el('cf-typeen').textContent='· '+t.en;
+  // 고정표지 → Off-position 자동 비활성 (자료 §8)
+  var isFloat=(t.g==='float');
+  var box=el('cf-offbox'),det=el('cf-offdetail'),fx=el('cf-offfixed'),cb=el('cf-off');
+  if(isFloat){ if(fx)fx.style.display='none'; if(cb)cb.disabled=false; if(box)box.style.opacity='1'; }
+  else { if(cb){cb.checked=false;cb.disabled=true;} if(det)det.style.display='none'; if(fx)fx.style.display='block'; if(box)box.style.opacity='0.6'; }
+}
+function cfOffToggle(){ var cb=el('cf-off'),det=el('cf-offdetail'); if(det)det.style.display=(cb&&cb.checked)?'block':'none'; }
+function cfNameCheck(){
+  var i=el('cf-name'),h=el('cf-namehint'); if(!i||!h)return;
+  var v=i.value; var n=v.length;
+  var bad=/[^A-Z0-9 \-\/]/.test(v.toUpperCase());
+  var msg=n+' / 34자';
+  if(n>20)msg+='  ⚠ 권장 20자 초과 (ENC에서 축약될 수 있음)';
+  if(bad)msg+='  ⚠ 영문 대문자·숫자·공백 권장';
+  h.textContent=msg;
+  h.style.color=(n>20||bad)?'#ca8a04':'var(--dim)';
+}
+function cfModeChanged(){
+  var m=el('cf-mode')?el('cf-mode').value:'PHYSICAL';
+  var isV=(m==='VIRTUAL');
+  var box=el('cf-virtbox'); if(box)box.style.display=isV?'block':'none';
+  if(isV){
+    if(el('cf-epfs'))el('cf-epfs').value='7';           // Surveyed 자동
+    if(el('cf-parent')&&!el('cf-parent').value&&window._deviceMmsi)el('cf-parent').value=window._deviceMmsi;
+  }
+  // 가상표지는 MT21만 방송 → MT6/MT8 스케줄 비활성화 (자료 기준)
+  var mt8=el('cf-mt8box'), mt6=el('cf-mt6box'), dest6=el('cf-dest6');
+  if(mt8){mt8.style.opacity=isV?'0.4':'1'; var i8=el('cf-per8'); if(i8)i8.disabled=isV;}
+  if(mt6){mt6.style.opacity=isV?'0.4':'1'; ['cf-per6i1','cf-per6i2','cf-per6i2en'].forEach(function(id){var e=el(id);if(e)e.disabled=isV;});}
+  if(dest6)dest6.disabled=isV;
+}
+function cfI2Toggle(){ var en=el('cf-per6i2en'),inp=el('cf-per6i2'); if(inp)inp.disabled=!(en&&en.checked); }
+function cfAccessChanged(){
+  var m=el('cf-access')?el('cf-access').value:'1';
+  var slot=el('cf-slot'),lbl=el('cf-slotlbl');
+  var fatdma=(m==='0');
+  if(slot)slot.disabled=!fatdma;
+  if(lbl){lbl.textContent=fatdma?'배정값':'자동';lbl.style.color=fatdma?'#ca8a04':'var(--dim)';}
+}
+function cfLimitDec(inp){
+  var v=inp.value; var dot=v.indexOf('.');
+  if(dot>=0 && v.length-dot-1>6){ inp.value=v.substring(0,dot+7); }
+}
+function cfStatusBits(){
+  var v=0,bin='';
+  for(var b=7;b>=0;b--){ var on=el('cf-sb'+b)&&el('cf-sb'+b).checked; if(on)v|=(1<<b); bin+=on?'1':'0'; }
+  if(el('cf-sbbin'))el('cf-sbbin').textContent=bin;
+  if(el('cf-sbhex'))el('cf-sbhex').textContent=v.toString(16).toUpperCase().padStart(2,'0');
+  if(el('cf-sbdec'))el('cf-sbdec').textContent=v;
+}
+function cfReadStatusBits(){ var v=0; for(var b=0;b<8;b++){ if(el('cf-sb'+b)&&el('cf-sb'+b).checked)v|=(1<<b);} return v; }
+
+function cfGetConfig(){
+  return {
+    mmsi:(el('cf-mmsi').value||'').trim(),
+    parentMmsi:(el('cf-parent')&&el('cf-parent').value||'').trim(),
+    stationMode:el('cf-mode').value,
+    atonType:parseInt((el('cf-typedetail')||{}).value,10)||0,
+    name:(el('cf-name').value||'').trim(),
+    lat:Math.round(parseFloat(el('cf-lat').value)*1e6)/1e6,
+    lon:Math.round(parseFloat(el('cf-lon').value)*1e6)/1e6,
+    dimA:parseInt(el('cf-da').value,10)||0, dimB:parseInt(el('cf-db').value,10)||0,
+    dimC:parseInt(el('cf-dc').value,10)||0, dimD:parseInt(el('cf-dd').value,10)||0,
+    epfs:parseInt(el('cf-epfs').value,10)||0,
+    atonStatus:cfReadStatusBits(),
+    per21:parseInt(el('cf-per21').value,10)||3,
+    per6i1:parseInt(el('cf-per6i1').value,10)||1,
+    per6i2:parseInt(el('cf-per6i2').value,10)||10,
+    per6i2en:el('cf-per6i2en')?el('cf-per6i2en').checked:true,
+    per8:parseInt(el('cf-per8').value,10)||3,
+    dest6:(el('cf-dest6').value||'').trim(),
+    accessMode:parseInt(el('cf-access').value,10),
+    startSlot:parseInt(el('cf-slot').value,10)||0,
+    posAccuracy:el('cf-acc').checked, offPosition:el('cf-off')?el('cf-off').checked:false,
+    offPosThreshold:parseInt((el('cf-offthr')||{}).value,10)||0, talker:(el('cf-talker').value||'AI').toUpperCase(),
+    utcSec:60
+  };
+}
+function cfValidate(c){
+  var e=[];
+  if(!/^\d{9}$/.test(c.mmsi))e.push('MMSI는 9자리 숫자여야 합니다');
+  if(c.stationMode==='VIRTUAL'){
+    if(!/^995/.test(c.mmsi))e.push('가상 표지는 통상 995xxxxxx MMSI를 사용합니다(경고)');
+    if(!/^\d{9}$/.test(c.parentMmsi))e.push('가상표지: 부모(Real) 장비 MMSI 9자리를 입력하세요');
+    else if(c.parentMmsi===c.mmsi)e.push('가상 MMSI가 부모(Real) MMSI와 같습니다 — 반드시 달라야 합니다');
+  }
+  if(isNaN(c.lat)||c.lat<-90||c.lat>90)e.push('위도 범위 오류(-90~90)');
+  if(isNaN(c.lon)||c.lon<-180||c.lon>180)e.push('경도 범위 오류(-180~180)');
+  if(c.name.length>34)e.push('명칭은 34자 이하');
+  return e;
+}
+function cfGenerate(){
+  var out=el('cf-out'); var c=cfGetConfig();
+  var errs=cfValidate(c);
+  var hard=errs.filter(function(x){return x.indexOf('경고')<0;});
+  if(hard.length){out.innerHTML='<div style="background:var(--panel);border-radius:10px;padding:14px;color:var(--red);font-size:12px">입력 오류:<br>• '+hard.join('<br>• ')+'</div>';return;}
+  var enc=CFG_ENG.encodeMsg21(c);
+  var aivdm=CFG_ENG.toAIVDM(enc.payload,enc.fill,'A');
+  var dec=CFG_ENG.decodeMsg21(enc.payload,enc.fill);
+  // 자기검증 표
+  function row(k,inp,dc){var ok=(String(inp)===String(dc));return'<tr><td style="padding:2px 6px;color:var(--dim)">'+k+'</td><td style="padding:2px 6px;font-family:monospace">'+inp+'</td><td style="padding:2px 6px;font-family:monospace">'+dc+'</td><td style="padding:2px 6px;text-align:center;color:'+(ok?'var(--green)':'var(--red)')+'">'+(ok?'✓':'✗')+'</td></tr>';}
+  // 좌표는 AIS 1/600000분 격자 반올림으로 ±1e-6 오차 정상 → 허용비교
+  function rowTol(k,inp,dc,tol){var ok=Math.abs(inp-dc)<=tol;return'<tr><td style="padding:2px 6px;color:var(--dim)">'+k+'</td><td style="padding:2px 6px;font-family:monospace">'+inp.toFixed(6)+'</td><td style="padding:2px 6px;font-family:monospace">'+dc.toFixed(6)+'</td><td style="padding:2px 6px;text-align:center;color:'+(ok?'var(--green)':'var(--red)')+'">'+(ok?'✓':'✗')+'</td></tr>';}
+  var vTbl='<table style="width:100%;font-size:11px;border-collapse:collapse"><tr style="color:var(--dim);font-size:10px"><th style="text-align:left;padding:2px 6px">항목</th><th style="text-align:left;padding:2px 6px">입력</th><th style="text-align:left;padding:2px 6px">디코딩</th><th></th></tr>'+
+    row('MMSI',c.mmsi,dec.mmsi)+
+    row('Type',c.atonType,dec.atonType)+
+    row('Name',c.name.toUpperCase().substring(0,34),dec.name)+
+    rowTol('Lat',c.lat,dec.lat,0.000002)+
+    rowTol('Lon',c.lon,dec.lon,0.000002)+
+    row('DimA',c.dimA,dec.dimA)+row('DimB',c.dimB,dec.dimB)+row('DimC',c.dimC,dec.dimC)+row('DimD',c.dimD,dec.dimD)+
+    row('EPFS',c.epfs,dec.epfs)+row('Status',c.atonStatus,dec.atonStatus)+
+    row('Virtual',c.stationMode==='VIRTUAL'?1:0,dec.virtual)+
+    '</table>';
+  var allOk = c.mmsi===dec.mmsi && c.atonType===dec.atonType && Math.abs(c.lat-dec.lat)<0.00001 && Math.abs(c.lon-dec.lon)<0.00001;
+  var box='background:var(--panel);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)';
+  var mono='font-family:monospace;font-size:11px;word-break:break-all;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px;user-select:all';
+  var warn = errs.filter(function(x){return x.indexOf('경고')>=0;});
+  out.innerHTML=
+    (warn.length?'<div style="'+box+';color:#ca8a04;font-size:11px">⚠ '+warn.join(' / ')+'</div>':'')+
+    '<div style="'+box+'">'+
+      '<div style="font-weight:800;font-size:13px;color:'+(allOk?'var(--green)':'var(--red)')+';margin-bottom:8px">'+(allOk?'✓ 자기검증 통과':'✗ 검증 불일치')+'</div>'+
+      vTbl+
+    '</div>'+
+    '<div style="'+box+'">'+
+      '<div style="font-weight:800;font-size:12px;color:var(--cyan)">📡 Message 21 (AIVDM) — 이 앱으로 수신 시 그대로 디코딩됨</div>'+
+      '<div style="'+mono+'">'+aivdm+'</div>'+
+      '<div style="font-size:10px;color:var(--dim);margin-top:4px">payload '+enc.payload.length+'자 / fill '+enc.fill+'</div>'+
+    '</div>'+
+    '<div style="'+box+'">'+
+      '<div style="font-weight:800;font-size:12px;color:var(--amber)">🔧 IEC 62320-2 설정 문장 (실제 장비 BNT AtoN AIS 기준)</div>'+
+      '<div style="font-size:10px;color:var(--dim);margin:4px 0">Talker ID <b>AI</b> 송신 / 장비응답 <b>AN</b>. 체크섬 실장비 로그로 검증됨. <b style="color:#ca8a04">미리보기 전용(전송 안 함)</b></div>'+
+      '<div style="font-size:10px;color:var(--cyan);margin:6px 0 2px">■ MMSI 등록 (AID)</div>'+
+      '<div style="'+mono+'">'+CFG_ENG.buildAID(c)+'</div>'+
+      '<div style="font-size:10px;color:var(--cyan);margin:6px 0 2px">■ 기본 설정 (ACE) — 상태/거동/명칭/치수</div>'+
+      '<div style="'+mono+'">'+CFG_ENG.buildACE(c)+'</div>'+
+      '<div style="font-size:10px;color:var(--cyan);margin:6px 0 2px">■ 상세 설정 (ACF) — 위치/채널/종류</div>'+
+      '<div style="'+mono+'">'+CFG_ENG.buildACF(c)+'</div>'+
+      '<div style="font-size:10px;color:var(--cyan);margin:6px 0 2px">■ 스케줄 (AAR) — interval=분, 채널별'+(c.stationMode==='VIRTUAL'?' <span style="color:#7c3aed">(가상=MT21만)</span>':'')+'</div>'+
+      '<div style="'+mono+'">'+CFG_ENG.buildAAR(c,21,1,0,0,0,0,c.per21*60,c.accessMode)+'  <span style="color:var(--dim)">MT21 '+c.per21+'분(→'+(c.per21*60)+'초)</span></div>'+
+      (c.stationMode!=='VIRTUAL'?(
+        '<div style="'+mono+'">'+CFG_ENG.buildAAR(c,6,1,0,0,0,0,c.per6i1*60,c.accessMode)+'  <span style="color:var(--dim)">MT6 idx1 '+c.per6i1+'분</span></div>'+
+        (c.per6i2en?'<div style="'+mono+'">'+CFG_ENG.buildAAR(c,6,2,0,0,0,0,c.per6i2*60,c.accessMode)+'  <span style="color:var(--dim)">MT6 idx2 '+c.per6i2+'분</span></div>':'')+
+        '<div style="'+mono+'">'+CFG_ENG.buildAAR(c,8,1,0,0,0,0,c.per8*60,c.accessMode)+'  <span style="color:var(--dim)">MT8 '+c.per8+'분(→'+(c.per8*60)+'초)</span></div>'
+      ):'')+
+      '<div style="font-size:10px;color:var(--cyan);margin:6px 0 2px">■ 현재값 조회 (Query)</div>'+
+      '<div style="'+mono+'">'+CFG_ENG.buildQuery(c,'AID')+'  '+CFG_ENG.buildQuery(c,'ACE')+'</div>'+
+      '<div style="'+mono+'">'+CFG_ENG.buildQuery(c,'ACF')+'  '+CFG_ENG.buildQuery(c,'AAR')+'</div>'+
+      (c.dest6?'<div style="font-size:10px;color:var(--dim);margin-top:4px">MT6 대상 MMSI: '+c.dest6+'</div>':'')+
+    '</div>'+
+    // ── 실제 장비 전송 (Step 2-B) ──
+    '<div style="'+box+';border:2px solid var(--red)">'+
+      '<div style="font-weight:800;font-size:13px;color:var(--red);margin-bottom:4px">⚠️ 실제 장비 전송</div>'+
+      '<div style="font-size:10px;color:var(--dim);margin-bottom:8px">아래 버튼은 <b style="color:var(--red)">실제 장비 설정을 변경</b>합니다. 전송 후 자동으로 다시 읽어(Read-back) 반영 여부를 검증합니다. 운용 중인 표지에는 신중히.</div>'+
+      '<button onclick="cfSendAll()" style="width:100%;padding:11px;border-radius:8px;background:var(--red);color:#fff;font-weight:800;font-size:14px;border:none;cursor:pointer">장비에 전송 + Read-back 검증</button>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
+        '<button onclick="cfSendOne(\'ACE\')" style="padding:8px;border-radius:6px;background:var(--bg);border:1px solid var(--red);color:var(--red);font-weight:700;font-size:11px;cursor:pointer">ACE만 전송</button>'+
+        '<button onclick="cfSendOne(\'ACF\')" style="padding:8px;border-radius:6px;background:var(--bg);border:1px solid var(--red);color:var(--red);font-weight:700;font-size:11px;cursor:pointer">ACF만 전송</button>'+
+      '</div>'+
+      '<div id="cf-sendresult" style="margin-top:8px"></div>'+
+    '</div>';
+  window._cfLast=c;   // Read-back 대조용 마지막 생성 설정
+}
+
+// ── 실제 장비 전송 + Read-back 검증 (Step 2-B) ──
+function _sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+// 한 문장 전송
+async function _sendSentence(s){
+  var r=await fetch('/config/send?s='+encodeURIComponent(s));
+  var d=await r.json(); return d.ok;
+}
+// 전송한 문장(sent)에 대응하는 정확한 응답 줄을 로그에서 찾는다
+//  - AAR: 같은 msgID(21/6/8) + ch1이 채워진 줄
+//  - AID: affectMMSI가 sent와 같은 줄 (Delete/000000000 줄 제외)
+//  - ACE/ACF: 해당 formatter 첫 RX
+function _findResp(sent, log){
+  var fmt=sent.substring(3,6);
+  var sc=_core(sent); // 전송 데이터필드
+  for(var i=0;i<log.length;i++){
+    var e=log[i]; if(e.dir!=='RX') continue;
+    var line=e.line; if(line.indexOf('$AN'+fmt)!==0) continue;
+    var rc=_core(line);
+    if(fmt==='AAR'){
+      // sc: [MMSI,msgID,index,ch1h,...] → msgID+index 일치 + ch1 채워진 응답
+      if(rc[1]===sc[1] && rc[2]===sc[2] && rc[3]!=='' && rc[3]!=null) return line;
+    } else if(fmt==='AID'){
+      // affectMMSI(3번째=index 2) 일치, Delete(D)·000000000 제외
+      if(rc[2]===sc[2] && rc[2]!=='000000000') return line;
+    } else {
+      return line; // ACE/ACF: 첫 RX
+    }
+  }
+  // 정밀매칭 실패 시 첫 RX 폴백
+  for(var k=0;k<log.length;k++){ if(log[k].dir==='RX' && log[k].line.indexOf('$AN'+fmt)===0) return log[k].line; }
+  return null;
+}
+function _core(x){ var b=x.substring(3, x.lastIndexOf('*')); var p=b.split(','); p.shift(); if(p.length)p.pop(); return p; }
+
+// Query 송신 후 로그 확보 (formatter 단위)
+async function _queryAndLog(fmt, talker){
+  await _sendSentence(CFG_ENG.buildQuery({talker:talker},fmt));
+  await _sleep(700);
+  var r=await fetch('/config/log'); var d=await r.json();
+  return d.log||[];
+}
+// 전송 문장(TX $AI..)과 응답($AN..)의 데이터 필드 비교 (talker/status 제외)
+//  AAR은 ch1 필드(0~7)만 비교 (ch2 빈필드 제외)
+function _cmpFields(sent, recv){
+  var fmt=sent.substring(3,6);
+  var a=_core(sent), b=_core(recv);
+  var lim = (fmt==='AAR') ? 8 : Math.max(a.length,b.length);  // AAR: MMSI,msgID,index,ch1(h,m,slot,int),tdma = 8필드
+  var diff=[];
+  for(var i=0;i<lim;i++){
+    var x=(a[i]||''), y=(b[i]||'');
+    if(x===y) continue;
+    // 양쪽이 순수 숫자면 숫자값 비교 (0패딩 4 vs 04, 0 vs 00 등 무시)
+    if(x!=='' && y!=='' && /^\d+$/.test(x) && /^\d+$/.test(y) && parseInt(x,10)===parseInt(y,10)) continue;
+    diff.push({i:i,sent:x||'∅',recv:y||'∅'});
+  }
+  return diff;
+}
+async function cfConfirmSend(msg){ return confirm(msg); }
+
+async function cfSendOne(fmt){
+  var c=cfGetConfig(); if(!window._cfLast){ showToast('먼저 생성+자기검증을 누르세요'); return; }
+  c=window._cfLast;
+  var built = fmt==='ACE'?CFG_ENG.buildACE(c) : fmt==='ACF'?CFG_ENG.buildACF(c) : fmt==='AID'?CFG_ENG.buildAID(c):null;
+  if(!built)return;
+  if(!await cfConfirmSend('⚠️ MMSI '+c.mmsi+' 장비에 '+fmt+'를 실제 전송합니다.\n\n'+built+'\n\n계속하시겠습니까?')) return;
+  var res=el('cf-sendresult'); res.innerHTML='<div style="font-size:12px;color:var(--dim)">전송 중…</div>';
+  var ok=await _sendSentence(built);
+  if(!ok){ res.innerHTML='<div style="font-size:12px;color:var(--red)">전송 실패 (USB 설정포트 확인)</div>'; return; }
+  await _sleep(500);
+  var log=await _queryAndLog(fmt, c.talker);
+  cfShowResult(res, [{fmt:fmt, sent:built, recv:_findResp(built, log)}]);
+}
+
+async function cfSendAll(){
+  if(!window._cfLast){ showToast('먼저 생성+자기검증을 누르세요'); return; }
+  var c=window._cfLast;
+  var plan=[
+    {fmt:'AID', s:CFG_ENG.buildAID(c)},
+    {fmt:'ACE', s:CFG_ENG.buildACE(c)},
+    {fmt:'ACF', s:CFG_ENG.buildACF(c)},
+    {fmt:'AAR', s:CFG_ENG.buildAAR(c,21,1,0,0,0,0,c.per21*60,c.accessMode)}
+  ];
+  if(c.stationMode!=='VIRTUAL'){   // 가상은 MT21만, 물리/합성만 MT6/MT8
+    plan.push({fmt:'AAR', s:CFG_ENG.buildAAR(c,6,1,0,0,0,0,c.per6i1*60,c.accessMode)});
+    if(c.per6i2en) plan.push({fmt:'AAR', s:CFG_ENG.buildAAR(c,6,2,0,0,0,0,c.per6i2*60,c.accessMode)});
+    plan.push({fmt:'AAR', s:CFG_ENG.buildAAR(c,8,1,0,0,0,0,c.per8*60,c.accessMode)});
+  }
+  var msg='⚠️ MMSI '+c.mmsi+' 장비에 전체 설정을 실제 전송합니다.\n\n'+
+    'AID(등록) → ACE(기본) → ACF(상세) → AAR(스케줄 MT21/6/8)\n순서로 '+plan.length+'개 문장 전송 후 Read-back 검증합니다.\n\n계속하시겠습니까?';
+  if(!await cfConfirmSend(msg)) return;
+  var res=el('cf-sendresult');
+  var results=[];
+  for(var i=0;i<plan.length;i++){
+    res.innerHTML='<div style="font-size:12px;color:var(--dim)">전송 중… ('+(i+1)+'/'+plan.length+') '+plan[i].fmt+'</div>';
+    var ok=await _sendSentence(plan[i].s);
+    await _sleep(600);
+    results.push({fmt:plan[i].fmt, sent:plan[i].s, ok:ok});
+  }
+  // Read-back: formatter별 1회 Query로 전체 로그 확보 후, 각 전송문장을 정밀 매칭
+  await _sleep(400);
+  var logAID=await _queryAndLog('AID', c.talker);
+  var logACE=await _queryAndLog('ACE', c.talker);
+  var logACF=await _queryAndLog('ACF', c.talker);
+  var logAAR=await _queryAndLog('AAR', c.talker);
+  var byFmt={AID:logAID,ACE:logACE,ACF:logACF,AAR:logAAR};
+  var disp=results.map(function(r){ return {fmt:r.fmt, sent:r.s||r.sent, recv:_findResp(r.sent||r.s, byFmt[r.fmt]), txok:r.ok}; });
+  cfShowResult(res, disp);
+}
+
+function cfShowResult(host, items){
+  var html='<div style="font-weight:800;font-size:12px;margin-bottom:6px">Read-back 검증 결과</div>';
+  items.forEach(function(it){
+    if(!it.recv){
+      html+='<div style="padding:6px;border-radius:6px;background:var(--bg);margin-bottom:4px;font-size:11px">'+
+        '<b style="color:#ca8a04">'+it.fmt+'</b> — 응답 없음 (전송'+(it.txok===false?' 실패':'됨, 조회 무응답')+')</div>';
+      return;
+    }
+    var diff=_cmpFields(it.sent, it.recv);
+    var okAll=(diff.length===0);
+    html+='<div style="padding:6px;border-radius:6px;background:var(--bg);margin-bottom:4px;font-size:11px;border-left:3px solid '+(okAll?'var(--green)':'var(--red)')+'">'+
+      '<b style="color:'+(okAll?'var(--green)':'var(--red)')+'">'+it.fmt+' '+(okAll?'✓ 반영 확인':'✗ 불일치 '+diff.length+'개')+'</b>';
+    if(!okAll){
+      html+='<div style="margin-top:3px;color:var(--dim);font-family:monospace;font-size:10px">';
+      diff.slice(0,6).forEach(function(d){ html+='필드'+d.i+': 보냄['+d.sent+'] ≠ 읽음['+d.recv+']<br>'; });
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  html+='<div style="font-size:10px;color:var(--dim);margin-top:4px">전송 로그는 위 "장비 통신" 섹션에서 확인</div>';
+  host.innerHTML=html;
+}
+
+function saveRef(){
+  var mmsi=(el('ref-mmsi').value||'').trim();
+  if(!mmsi){alert('MMSI를 입력하세요');return;}
+  var ref={mmsi:mmsi,rf:parseFloat(el('ref-rf').value)||null,
+    rfM:parseFloat(el('ref-rf-margin').value)||5,
+    p21:parseInt(el('ref-p21').value)||180,
+    p6:parseInt(el('ref-p6').value)||600,
+    p8:parseInt(el('ref-p8').value)||600};
+  try{localStorage.setItem('aton_ref_'+mmsi,JSON.stringify(ref));
+    localStorage.setItem('aton_ref_last',mmsi);}catch(e){}
+  showToast('기준값 저장됨 (MMSI: '+mmsi+')');
+}
+function loadRef(){
+  var mmsi='';try{mmsi=localStorage.getItem('aton_ref_last')||'';}catch(e){}
+  if(!mmsi)return;
+  var ref={};try{ref=JSON.parse(localStorage.getItem('aton_ref_'+mmsi)||'{}');}catch(e){}
+  if(ref.mmsi)el('ref-mmsi').value=ref.mmsi;
+  if(ref.rf!=null)el('ref-rf').value=ref.rf;
+  if(ref.rfM)el('ref-rf-margin').value=ref.rfM;
+  if(ref.p21)el('ref-p21').value=ref.p21;
+  if(ref.p6)el('ref-p6').value=ref.p6;
+  if(ref.p8)el('ref-p8').value=ref.p8;
+}
+function showToast(msg){
+  var t=document.createElement('div');t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;z-index:9999;pointer-events:none;white-space:nowrap';
+  document.body.appendChild(t);setTimeout(function(){t.remove();},2000);
+}
+function jPeriod(val,ref,mp){
+  if(val==null)return{icon:'--',color:'var(--dim)',label:'데이터 부족'};
+  var lo=ref*(1-mp/100),hi=ref*(1+mp/100);
+  if(val>=lo&&val<=hi)return{icon:'[정상]',color:'var(--green)',label:'정상'};
+  if(val>=ref*(1-mp*2/100)&&val<=ref*(1+mp*2/100))return{icon:'[주의]',color:'#ca8a04',label:'주의'};
+  return{icon:'[점검]',color:'var(--red)',label:'점검 필요'};
+}
+function fmtSec(sec){
+  if(sec==null)return'-';var s=Math.round(sec);
+  return s>=60?(Math.floor(s/60)+'분'+(s%60?' '+(s%60)+'초':'')):(s+'초');
+}
+function mkRow(label,judge,detail){
+  return '<div style="padding:7px 0;border-bottom:1px solid var(--border)">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center">'+
+    '<span style="color:var(--dim);font-size:12px">'+label+'</span>'+
+    '<span style="color:'+judge.color+';font-weight:700;font-size:12px">'+judge.label+'</span></div>'+
+    (detail?'<div style="font-size:10px;color:var(--dim);margin-top:2px">'+detail+'</div>':'')+
+    '</div>';
+}
+// 수신 이력 리스트: times = epoch ms 배열(최신순). "시각 (+간격초)" 로 표기
+function rxHist(times,mt){
+  if(!times||times.length===0)return'';
+  var m=mtMeta(mt||0);
+  var h='<div style="padding:4px 0 8px 8px;border-bottom:1px solid var(--border);border-left:3px solid '+m.color+';margin-bottom:2px">';
+  h+='<div style="font-size:10px;font-weight:700;color:'+m.color+';margin-bottom:2px">'+m.icon+' '+m.label+' 수신 이력</div>';
+  // 오래된→최신 순으로 뒤집어서 간격 계산이 자연스럽게
+  var arr=times.slice().reverse();  // 이제 오름차순(과거→현재)
+  for(var i=0;i<arr.length;i++){
+    var t=new Date(arr[i]);
+    var hh=('0'+t.getHours()).slice(-2), mm=('0'+t.getMinutes()).slice(-2), ss=('0'+t.getSeconds()).slice(-2);
+    var gap = i>0 ? Math.round((arr[i]-arr[i-1])/1000) : null;
+    h+='<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--dim);padding:1px 0">'+
+       '<span style="font-family:monospace">'+(i+1)+'. '+hh+':'+mm+':'+ss+'</span>'+
+       '<span>'+(gap!=null?('+'+gap+'초'):'—')+'</span></div>';
+  }
+  // 평균 간격
+  if(arr.length>=2){
+    var avg=Math.round((arr[arr.length-1]-arr[0])/1000/(arr.length-1));
+    h+='<div style="font-size:10px;color:'+m.color+';text-align:right;margin-top:2px;font-weight:700">평균 간격 '+avg+'초 ('+arr.length+'회)</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+async function startAnalysis(){
+  var mmsi=(el('ref-mmsi').value||'').trim();
+  if(!mmsi){alert('MMSI를 입력하세요');return;}
+  var ref={};try{ref=JSON.parse(localStorage.getItem('aton_ref_'+mmsi)||'{}');}catch(e){}
+  if(!ref.mmsi){alert('기준값을 먼저 저장하세요');return;}
+  var body=el('analysis-body');
+  body.innerHTML='<div style="padding:20px;color:var(--dim)">분석 중...</div>';
+  try{
+    var pr=await fetch('/periods/'+encodeURIComponent(mmsi));
+    var pd=await pr.json();
+    var dr=await fetch('/data.json');
+    var dd=JSON.parse(await dr.text());
+    var aton=(dd.atons||[]).find(function(a){return String(a.mmsi)===String(mmsi);});
+    var mt21=pd.mt21||null,mt6=pd.mt6||null,mt8=pd.mt8||null;
+    var cnt21=pd.mt21_cnt||0,cnt6=pd.mt6_cnt||0,cnt8=pd.mt8_cnt||0;
+    var j21=jPeriod(mt21,ref.p21,20),j6=jPeriod(mt6,ref.p6,20),j8=jPeriod(mt8,ref.p8,20);
+    var aName=aton?(aton.name||'MMSI:'+mmsi):'(미수신)';
+    var offPos=aton&&aton.off_position;
+    var rows='';
+    // ── RF 신호세기 (RTL-SDR 전용) ──
+    if(pd.rf_pwr!=null){
+      var pwr=pd.rf_pwr, snr=pd.rf_snr, ppm=pd.rf_ppm, avg=pd.rf_avg, nrx=pd.rf_n||0, age=pd.rf_age;
+      // 안테나/신호 판정: 기준값(ref.rf) 있으면 ±margin, 없으면 수신 여부만
+      var rj;
+      if(ref.rf!=null){
+        var d=Math.abs(pwr-ref.rf);
+        if(d<=ref.rfM)rj={c:'var(--green)',t:'정상'};
+        else if(d<=ref.rfM*2)rj={c:'#ca8a04',t:'주의'};
+        else rj={c:'var(--red)',t:'점검'};
+      } else {
+        rj={c:'var(--green)',t:'수신중'};
+      }
+      // 신선도: 마지막 수신이 오래됐으면 경고
+      if(age!=null&&age>60)rj={c:'#ca8a04',t:age+'초 전'};
+      var det='현재 '+pwr+'dB';
+      if(avg!=null)det+=' / 평균 '+avg+'dB('+nrx+'회)';
+      if(snr!=null)det+=' / SNR≈'+snr+'dB';
+      if(ppm!=null)det+=' / '+ppm+'ppm';
+      if(ref.rf!=null)det+=' / 기준 '+ref.rf+'±'+ref.rfM+'dB';
+      rows+=mkRow('RF 신호세기',{icon:'',color:rj.c,label:rj.t},det);
+    } else {
+      rows+='<div style="padding:7px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between"><span style="color:var(--dim);font-size:12px">RF 신호세기</span><span style="color:var(--dim);font-size:12px">데이터 없음(USB NMEA/미수신)</span></div>'+(ref.rf!=null?'<div style="font-size:10px;color:var(--dim);margin-top:2px">기준: '+ref.rf+'dB ±'+ref.rfM+'dB</div>':'')+'</div>';
+    }
+    if(offPos)rows+='<div style="padding:7px 0;border-bottom:1px solid var(--border);color:var(--red);font-weight:700;font-size:12px">위치이탈(Off-Position) 감지</div>';
+    rows+=mkRow('MT21 수신주기',j21,'기준: '+fmtSec(ref.p21)+' / 현재: '+fmtSec(mt21)+' / '+cnt21+'회');
+    rows+=rxHist(pd.mt21_times,21);
+    rows+=mkRow('MT6  수신주기',j6, '기준: '+fmtSec(ref.p6) +' / 현재: '+fmtSec(mt6) +' / '+cnt6+'회');
+    rows+=rxHist(pd.mt6_times,6);
+    rows+=mkRow('MT8  수신주기',j8, '기준: '+fmtSec(ref.p8) +' / 현재: '+fmtSec(mt8) +' / '+cnt8+'회');
+    rows+=rxHist(pd.mt8_times,8);
+    body.innerHTML='<div style="text-align:center;padding:6px 0 10px;border-bottom:1px solid var(--border);margin-bottom:6px">'+
+      '<div style="font-weight:800;font-size:14px">'+aName+'</div>'+
+      '<div style="font-size:10px;color:var(--dim)">MMSI '+mmsi+' | '+new Date().toLocaleTimeString('ko-KR')+'</div></div>'+
+      rows+
+      (cnt21<3?'<div style="font-size:10px;color:#ca8a04;text-align:center;margin-top:8px">MT21 이력 '+cnt21+'회. 3회 이상 수신 후 재분석 권고</div>':'');
+  }catch(e){body.innerHTML='<div style="color:var(--red);padding:20px;font-size:12px">오류: '+e.message+'</div>';}
+}
+
+</script>
+</body>
+</html>

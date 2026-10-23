@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    RTL-SDR USB 장치 필터
+    RTL2832U 칩셋 기반 모든 DVB-T 동글 포함
+-->
+<resources>
+    <!-- Realtek RTL2832U (기본) -->
+    <usb-device vendor-id="0x0BDA" product-id="0x2832"/>
+    <!-- Realtek RTL2838U -->
+    <usb-device vendor-id="0x0BDA" product-id="0x2838"/>
+    <!-- Realtek RTL2840 -->
+    <usb-device vendor-id="0x0BDA" product-id="0x2840"/>
+    <!-- Realtek RTL2848 -->
+    <usb-device vendor-id="0x0BDA" product-id="0x2848"/>
+    <!-- Realtek RTL2850 -->
+    <usb-device vendor-id="0x0BDA" product-id="0x2850"/>
+    <!-- ezcap EzTV645 -->
+    <usb-device vendor-id="0x0BDA" product-id="0x2836"/>
+    <!-- Terratec T Stick RC -->
+    <usb-device vendor-id="0x0CCD" product-id="0x00D3"/>
+</resources>

@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 중앙 영역(72x72, 18~90)에 닻(anchor) 심볼 -->
+    <group android:scaleX="1.0" android:scaleY="1.0">
+        <!-- 상단 고리 -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:pathData="M54,30 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+        <!-- 세로 샤프트 -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:pathData="M54,37 L54,80" />
+        <!-- 크로스바 -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:pathData="M42,48 L66,48" />
+        <!-- 하단 플루크(곡선) -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:pathData="M34,66 C34,84 46,84 54,80 C62,84 74,84 74,66" />
+    </group>
+</vector>

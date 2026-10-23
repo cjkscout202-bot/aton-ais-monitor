@@ -1,0 +1,23 @@
+# ── Android / Gradle 빌드 산출물 ──
+.gradle/
+build/
+app/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# ── IDE / 로컬 설정 ──
+.idea/
+*.iml
+local.properties
+.DS_Store
+
+# ※ 주의: 아래는 반드시 커밋에 포함해야 함 (복구 대상)
+#   - app/src/main/assets/index.html   (웹앱 UI 전체)
+#   - app/src/main/jniLibs/**/*.so      (미리 빌드된 librtlsdr)
+#   - app/src/main/cpp/**               (네이티브 소스)
+#   - app/src/main/java/**/*.kt         (앱 로직)
