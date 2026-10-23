@@ -1,6 +1,5 @@
 name: Build APK
 
-# main 브랜치에 push할 때마다, 또는 수동 실행 시 APK를 빌드한다.
 on:
   push:
     branches: [ main ]
@@ -22,11 +21,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK 설치
-        uses: android-actions/setup-android@v3
-
-      - name: NDK · CMake 설치 (네이티브 빌드용)
-        run: sdkmanager "ndk;25.1.8937393" "cmake;3.22.1"
+      - name: NDK · CMake 설치 + 라이선스 동의
+        run: |
+          SDKMGR="$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "sdkmanager=$SDKMGR"
+          yes | "$SDKMGR" --licenses >/dev/null 2>&1 || true
+          "$SDKMGR" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;25.1.8937393" "cmake;3.22.1"
 
       - name: Gradle 설치
         uses: gradle/actions/setup-gradle@v4
