@@ -29,13 +29,6 @@ extern "C" {
 
 typedef struct rtlsdr_dev rtlsdr_dev_t;
 
-enum rtlsdr_ds_mode {
-	RTLSDR_DS_IQ = 0,	/* I/Q quadrature sampling of tuner output */
-	RTLSDR_DS_I,		/* 1: direct sampling on I branch: usually not connected */
-	RTLSDR_DS_Q,		/* 2: direct sampling on Q branch: HF on rtl-sdr v3 dongle */
-};
-
-
 RTLSDR_API uint32_t rtlsdr_get_device_count(void);
 
 RTLSDR_API const char* rtlsdr_get_device_name(uint32_t index);
@@ -68,6 +61,9 @@ RTLSDR_API int rtlsdr_get_device_usb_strings(uint32_t index,
 RTLSDR_API int rtlsdr_get_index_by_serial(const char *serial);
 
 RTLSDR_API int rtlsdr_open(rtlsdr_dev_t **dev, uint32_t index);
+
+/* Android: Java USB fd 로 오픈 (호출 후 rtlsdr_open 하면 이 fd 사용) */
+RTLSDR_API void rtlsdr_set_fd(int fd);
 
 RTLSDR_API int rtlsdr_close(rtlsdr_dev_t *dev);
 
@@ -309,7 +305,6 @@ RTLSDR_API int rtlsdr_set_agc_mode(rtlsdr_dev_t *dev, int on);
  * \param on 0 means disabled, 1 I-ADC input enabled, 2 Q-ADC input enabled
  * \return 0 on success
  */
-int _rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on);
 RTLSDR_API int rtlsdr_set_direct_sampling(rtlsdr_dev_t *dev, int on);
 
 /*!
@@ -407,7 +402,6 @@ RTLSDR_API int rtlsdr_set_bias_tee(rtlsdr_dev_t *dev, int on);
  */
 RTLSDR_API int rtlsdr_set_bias_tee_gpio(rtlsdr_dev_t *dev, int gpio, int on);
 
-RTLSDR_API int rtlsdr_check_dongle_model(void *dev, char *manufact_check, char *product_check);
 
 #ifdef __cplusplus
 }

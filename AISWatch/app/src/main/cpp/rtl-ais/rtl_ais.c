@@ -38,10 +38,20 @@
 #endif
 
 #include <pthread.h>
+#include <time.h>
 
 #include <rtl-sdr.h>
 
 #include "rtl_ais.h"
+#ifdef __ANDROID__
+extern void aiswatch_diag(const char *fmt, ...);
+/* AIS-catcher 복조 브리지 */
+extern int  aiswatch_aisc_init(void);
+extern void aiswatch_aisc_process(const unsigned char* iq, int nbytes);
+extern void aiswatch_aisc_cleanup(void);
+#else
+#define aiswatch_diag(...)
+#endif
 #include "convenience.h"
 #include "aisdecoder/aisdecoder.h"
 
@@ -352,14 +362,16 @@ static void rtlsdr_callback(unsigned char *buf, uint32_t len, void *arg)
 {
         struct rtl_ais_context *ctx = arg;
 	unsigned i;
+	{ static unsigned long _cb=0;
+	  if((_cb++ % 200)==0){ long sum=0; int mx=0, sat=0; unsigned k;
+	    for(k=0;k<len;k++){ int d=(int)buf[k]-127; int a=d<0?-d:d; sum+=a; if(a>mx)mx=a; if(buf[k]==0||buf[k]==255)sat++; }
+	    aiswatch_diag("IQ #%lu 평균=%ld 최대=%d 포화=%d (건강:평균15~60,포화≈0)", _cb, sum/(long)len, mx, sat); } }
 	if (!ctx->active) {
 		return;}
-	pthread_rwlock_wrlock(&ctx->both.rw);
-	for (i=0; i<len; i++)
-		ctx->both.buf[i] = ((int16_t)buf[i]) - 127;
-
-	pthread_rwlock_unlock(&ctx->both.rw);
-	safe_cond_signal(&ctx->ready, &ctx->ready_m);
+	/* AIS-catcher 브리지로 raw IQ 전달 (고감도 복조) */
+	aiswatch_aisc_process(buf, (int)len);
+	/* rtl-ais 자체 복조는 사용 안 함 (약함) */
+	(void)i;
 }
 
 static void *rtlsdr_thread_fn(void *arg)
@@ -386,7 +398,18 @@ static void *demod_thread_fn(void *arg)
 {
         struct rtl_ais_context *ctx = arg;
         while (ctx->active) {
-                safe_cond_wait(&ctx->ready, &ctx->ready_m);
+                /* 타임드 웨이트: 최대 100ms마다 깨어나 active 재확인
+                   (조건변수 신호 유실로 인한 무한대기·ANR·크래시 방지) */
+                {
+                    struct timespec _ts;
+                    clock_gettime(CLOCK_REALTIME, &_ts);
+                    _ts.tv_nsec += 100000000L;
+                    if (_ts.tv_nsec >= 1000000000L) { _ts.tv_sec++; _ts.tv_nsec -= 1000000000L; }
+                    pthread_mutex_lock(&ctx->ready_m);
+                    pthread_cond_timedwait(&ctx->ready, &ctx->ready_m, &_ts);
+                    pthread_mutex_unlock(&ctx->ready_m);
+                }
+                if (!ctx->active) break;
                 pthread_rwlock_wrlock(&ctx->both.rw);
 		downsample(&ctx->both);
 		memcpy(ctx->left.buf,  ctx->both.buf, 2*ctx->both.len_out);
@@ -501,11 +524,11 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 	delta = config->right_freq - config->left_freq;
         if (delta > 1.2e6) {
 		fprintf(stderr, "Frequencies may be at most 1.2MHz apart.");
-		exit(1);
+		return NULL;
 	}
 	if (delta < 0) {
 		fprintf(stderr, "Left channel must be lower than right channel.");
-		exit(1);
+		return NULL;
 	}
 	i = (int)log2(2.4e6 / delta);
 	dongle_rate = delta * (1<<i);
@@ -527,7 +550,7 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 	ctx->dc_filter=config->dc_filter;
 	if (ctx->left.rate_out > config->output_rate) {
 		fprintf(stderr, "Channel bandwidth too high or output bandwidth too low.");
-		exit(1);
+		return NULL;
 	}
 
         fprintf(stderr, "Buffer size: %0.2f mS\n", 1000 * (double)DEFAULT_BUF_LENGTH / (double)dongle_rate);
@@ -557,7 +580,7 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
         }
 
 	if (config->dev_index < 0) {
-		exit(1);
+		return NULL;
 	}
 
 	downsample_init(&ctx->both);
@@ -570,7 +593,7 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 	int r = rtlsdr_open(&ctx->dev, (uint32_t)config->dev_index);
 	if (r < 0) {
 		fprintf(stderr, "Failed to open rtlsdr device #%d.\n", config->dev_index);
-		exit(1);
+		return NULL;
 	}
 
         if(!config->use_internal_aisdecoder){
@@ -584,7 +607,7 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 			ctx->file = fopen(config->filename, "wb");
 			if (!ctx->file) {
                             fprintf(stderr, "Failed to open %s\n", config->filename);
-    exit(1);
+    return NULL;
 			}
 		}
 	}
@@ -594,7 +617,7 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 			fprintf(stderr,"Error initializing built-in AIS decoder\n");
 			rtlsdr_cancel_async(ctx->dev);
 			rtlsdr_close(ctx->dev);
-			exit(1);
+			return NULL;
 		}
 	}
         ctx->use_internal_aisdecoder = config->use_internal_aisdecoder;
@@ -605,12 +628,13 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 	} else {
 		config->gain = nearest_gain(ctx->dev, config->gain);
 		verbose_gain_set(ctx->dev, config->gain);
+		aiswatch_diag("게인 고정 적용 = %d (%.1f dB)", config->gain, config->gain/10.0);
 	}
 	if(config->rtl_agc){
 		int r = rtlsdr_set_agc_mode(ctx->dev, 1);
 		if(r<0)	{
 			fprintf(stderr,"Error seting RTL AGC mode ON");
-			exit(1);
+			return NULL;
 		}
 		else {
 			fprintf(stderr,"RTL AGC mode ON\n");
@@ -626,7 +650,9 @@ struct rtl_ais_context *rtl_ais_start(struct rtl_ais_config *config)
 	verbose_set_frequency(ctx->dev, dongle_freq);
 
 	/* Set the sample rate */
-	verbose_set_sample_rate(ctx->dev, dongle_rate);
+	/* AIS-catcher 브리지용: 동글을 288000Hz로 고정 (28.8MHz÷100, 정확 생성 가능) */
+	verbose_set_sample_rate(ctx->dev, 288000);
+	aiswatch_diag("동글 샘플레이트 288000 설정 (AIS-catcher 복조)");
 
 	/* Reset endpoint before we start reading from it (mandatory) */
 	verbose_reset_buffer(ctx->dev);
@@ -654,25 +680,23 @@ const char *rtl_ais_next_message(struct rtl_ais_context *ctx)
 
 void rtl_ais_cleanup(struct rtl_ais_context *ctx)
 {
+	/* 1. USB 비동기 읽기 취소 → rtlsdr_thread 루프 탈출 유도 */
 	rtlsdr_cancel_async(ctx->dev);
-        ctx->active = 0;
-
-        pthread_detach(ctx->demod_thread);
-        pthread_detach(ctx->rtlsdr_thread);
-
+	/* 2. 복조 루프 종료 플래그 + 대기중인 복조 스레드 깨우기 */
+	ctx->active = 0;
+	safe_cond_signal(&ctx->ready, &ctx->ready_m);
+	/* 3. 두 스레드가 실제로 끝날 때까지 대기 (free 전에! use-after-free 방지) */
+	pthread_join(ctx->rtlsdr_thread, NULL);
+	pthread_join(ctx->demod_thread, NULL);
+	/* 4. 스레드 종료 후에야 안전하게 정리 */
 	if (ctx->file != stdout) {
 		if(ctx->file)
 			fclose(ctx->file);
 	}
-
-	rtlsdr_cancel_async(ctx->dev);
-	safe_cond_signal(&ctx->ready, &ctx->ready_m);
 	pthread_cond_destroy(&ctx->ready);
 	pthread_mutex_destroy(&ctx->ready_m);
-
-        rtlsdr_close(ctx->dev);
-
-        free(ctx);
+	rtlsdr_close(ctx->dev);
+	free(ctx);
 }
 
 

@@ -1,0 +1,186 @@
+/*
+	Copyright(c) 2021-2026 jvde.github@gmail.com
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#pragma once
+
+#include <vector>
+#include <thread>
+#include <fstream>
+#include <iostream>
+
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
+
+#include "FIFO.h"
+
+#include "Common.h"
+#include "Parse.h"
+#include "Convert.h"
+
+namespace Device {
+
+	class Description {
+
+		std::string vendor;
+		std::string product;
+		std::string serial;
+		uint64_t handle;
+		Type type;
+		bool claimed = false;
+
+	public:
+		Description(std::string v, std::string p, std::string s, uint64_t h, Type t) : vendor(v), product(p), serial(s), handle(h), type(t) {}
+
+		std::string toString() { return vendor + ", " + product + ", SN: " + serial; }
+
+		const std::string &getSerial() { return serial; }
+		Type getType() { return type; }
+		uint64_t getHandle() { return handle; }
+		bool isClaimed() { return claimed; }
+		void setClaimed(bool c = true) { claimed = c; }
+	};
+
+	class Device : public SimpleStreamOut<RAW>, public Setting {
+	protected:
+		bool streaming = false;
+		FLOAT32 freq_offset = 0;
+		int tuner_bandwidth = 0;
+		uint32_t frequency = 0;
+		Format format = Format::UNKNOWN;
+		uint32_t sample_rate = 0;
+		Type DeviceType = Type::NONE;
+
+		uint32_t getCorrectedFrequency() {
+			return (uint32_t)((float)frequency * (1.0f - freq_offset / 1000000.0f));
+		}
+
+	public:
+		// DeviceBase
+		Device() {}
+		Device(Format f, uint32_t s, Type t, const std::string &name = "Device") : Setting(name), format(f), sample_rate(s), DeviceType(t) {}
+		virtual ~Device() {}
+
+		virtual void Open(uint64_t) {}
+		virtual void OpenWithFileDescriptor(int) { throw std::runtime_error("Not supported for this device."); }
+
+		virtual void Close() {}
+		virtual void Play() { streaming = true; }
+		virtual void Stop() { streaming = false; }
+
+		virtual void setSampleRate(uint32_t s) { sample_rate = s; }
+		virtual void setFrequency(uint32_t f) { frequency = f; }
+
+		virtual uint32_t getSampleRate() { return sample_rate; }
+		virtual std::string getRateDescription() { return std::to_string(getSampleRate() / 1000) + "K"; }
+		virtual uint32_t getFrequency() { return frequency; }
+
+		virtual bool isCallback() { return true; }
+		virtual bool isStreaming() { return streaming; }
+		virtual bool isReplay() { return false; }
+
+		virtual std::vector<uint32_t> SupportedSampleRates() { return std::vector<uint32_t>(); }
+		virtual void getDeviceList(std::vector<Description>& DeviceList) {}
+
+		virtual Setting& SetKey(AIS::Keys key, const std::string& arg) {
+			switch (key) {
+			case AIS::KEY_SETTING_SAMPLE_RATE:
+				setSampleRate((Util::Parse::Integer(arg, 0, 20000000)));
+				break;
+			case AIS::KEY_SETTING_BANDWIDTH:
+				tuner_bandwidth = Util::Parse::Integer(arg, 0, 1000000);
+				break;
+			case AIS::KEY_SETTING_FREQOFFSET:
+				freq_offset = Util::Parse::Float(arg, -150, 150);
+				break;
+			case AIS::KEY_SETTING_FORMAT: {
+				Format f;
+				if (!Util::Parse::StreamFormat(arg, f))
+					throw std::runtime_error("Unknown file format specification.");
+				else
+					setFormat(f);
+				break;
+			}
+			default:
+				throw std::runtime_error(getName() + ": unknown setting \"" + AIS::KeyMap[key][JSON_DICT_SETTING] + "\"");
+			}
+			return *this;
+		}
+
+		virtual std::string Get() {
+
+			std::string str;
+			uint32_t rate = getSampleRate();
+			if (rate != 0) {
+				str = "rate " + std::to_string(rate / 1000) + "K";
+			}
+			if (tuner_bandwidth) {
+				if (!str.empty()) str += " ";
+				str += "bw " + std::to_string(tuner_bandwidth / 1000) + "K";
+			}
+			if (freq_offset) {
+				if (!str.empty()) str += " ";
+				str += "freqoffset " + std::to_string(freq_offset);
+			}
+			if (!str.empty()) str += " ";
+			str += "format " + Util::Convert::toString(format);
+
+			return str;
+		}
+
+		virtual std::string getProduct() {
+			return "";
+		}
+		virtual std::string getVendor() {
+			return "";
+		}
+		virtual std::string getSerial() {
+			return "";
+		}
+
+		// Stable identity of this input across engine runs; network devices
+		// override it with their address.
+		virtual std::string getIdentity() {
+			return getProduct() + ":" + getSerial();
+		}
+
+		virtual void setFormat(Format f) { format = f; }
+		virtual Format getFormat() { return format; }
+		Type getDriver() { return DeviceType; }
+	};
+
+	// Stub base for devices whose backing library is not compiled into this build.
+	// Configuration is silently accepted (so shared configs don't break across builds);
+	// any attempt to actually start the device fails fast with a build-flag hint.
+	class Unavailable : public Device {
+		std::string device_name;
+		std::string build_flag;
+
+	public:
+		Unavailable(const std::string &n, const std::string &f, Type t = Type::NONE)
+			: Device(Format::UNKNOWN, 0, t, n), device_name(n), build_flag(f) {}
+
+		void Open(uint64_t) override {
+			throw std::runtime_error(device_name + " support not compiled in. Rebuild with -D" + build_flag + "=ON.");
+		}
+		void Play() override { Open(0); }
+		void getDeviceList(std::vector<Description> &) override {}
+		Setting &SetKey(AIS::Keys, const std::string &) override { return *this; }
+		std::string Get() override { return "(not compiled in: rebuild with -D" + build_flag + "=ON)"; }
+		std::string getProduct() override { return device_name + " [not compiled in]"; }
+	};
+}

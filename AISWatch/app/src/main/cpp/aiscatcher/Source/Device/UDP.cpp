@@ -1,0 +1,190 @@
+/*
+	Copyright(c) 2021-2026 jvde.github@gmail.com
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#include <cstring>
+#ifndef _WIN32
+#include <sys/select.h>
+#endif
+
+#include "UDP.h"
+
+namespace Device
+{
+	void UDP::StopServer()
+	{
+		if (sock != -1)
+		{
+			Net::closeSocket(sock);
+			sock = -1;
+		}
+
+		if (address != nullptr)
+		{
+			freeaddrinfo(address);
+			address = nullptr;
+		}
+	}
+
+	void UDP::StartServer()
+	{
+
+		struct addrinfo hints;
+		memset(&hints, 0, sizeof(hints));
+
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_socktype = SOCK_DGRAM;
+		hints.ai_protocol = IPPROTO_UDP;
+
+		int r = getaddrinfo(server.c_str(), port.c_str(), &hints, &address);
+		if (r != 0 || address == NULL)
+		{
+			throw std::runtime_error("UDP: cannot resolve address.");
+		}
+
+		sock = socket(address->ai_family, SOCK_DGRAM, 0);
+		if (sock == -1)
+		{
+			StopServer();
+			throw std::runtime_error("UDP: cannot create socket.");
+		}
+
+#ifndef _WIN32
+		int optval = 1;
+		if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) != 0)
+		{
+			StopServer();
+			throw std::runtime_error("UDP: cannot set socket option.");
+		}
+#endif
+
+		if (!Net::setNonBlocking(sock))
+		{
+			StopServer();
+			throw std::runtime_error("UDP: cannot make the socket non-blocking.");
+		}
+
+		if (bind(sock, address->ai_addr, address->ai_addrlen) != 0)
+		{
+			Debug() << "UDP: binding to " << server << " port " << port << ": " << strerror(errno);
+			StopServer();
+			throw std::runtime_error("UDP: cannot bind to port.");
+		}
+		SleepSystem(100);
+		Debug() << "UDP: listening on " << server << " port " << port;
+	}
+	void UDP::Close()
+	{
+		Device::Close();
+		Stop();
+		StopServer();
+	}
+
+	void UDP::Play()
+	{
+
+		Device::Play();
+		applySettings();
+
+		StartServer();
+		lost = false;
+		run_thread = std::thread(&UDP::Run, this);
+
+		SleepSystem(10);
+	}
+
+	void UDP::Stop()
+	{
+		if (Device::isStreaming())
+		{
+			Device::Stop();
+
+			if (run_thread.joinable())
+				run_thread.join();
+		}
+		StopServer();
+	}
+
+	void UDP::Run()
+	{
+		Debug() << "UDP: starting thread.";
+		char buffer[16384];
+		RAW r = {getFormat(), buffer, 0};
+		int nread;
+		while (isStreaming())
+		{
+			do
+			{
+				nread = recv(sock, buffer, sizeof(buffer), 0);
+
+				if (nread > 0)
+				{
+					r.size = nread;
+					Send(&r, 1, tag);
+				}
+				else if (nread < 0 && !Net::wouldBlock(Net::lastError()))
+				{
+					Error() << "UDP: receive error: " << Net::errorString(Net::lastError());
+					lost = true;
+				}
+			} while (nread > 0 && isStreaming());
+
+			struct timeval tv;
+			fd_set fds;
+
+			FD_ZERO(&fds);
+			FD_SET(sock, &fds);
+
+			tv = {1, 0};
+			select(sock + 1, &fds, nullptr, nullptr, &tv);
+		}
+		Debug() << "UDP: ending thread.";
+	}
+
+	void UDP::applySettings()
+	{
+	}
+
+	void UDP::getDeviceList(std::vector<Description> &DeviceList)
+	{
+		DeviceList.push_back(Description("UDP", "UDP", "UDP", (uint64_t)0, Type::UDP));
+	}
+
+	Setting &UDP::SetKey(AIS::Keys key, const std::string &arg)
+	{
+		switch (key)
+		{
+		case AIS::KEY_SETTING_PORT:
+			port = arg;
+			break;
+		case AIS::KEY_SETTING_SERVER:
+			server = arg;
+			break;
+		case AIS::KEY_SETTING_FORMAT:
+			throw std::runtime_error("UDP: format cannot be changed and need to be TXT.");
+			break;
+		default:
+			Device::SetKey(key, arg);
+			break;
+		}
+		return *this;
+	}
+
+	std::string UDP::Get()
+	{
+		return Device::Get() + " server " + server + " port " + port;
+	}
+}

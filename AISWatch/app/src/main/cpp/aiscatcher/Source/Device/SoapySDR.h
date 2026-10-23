@@ -1,0 +1,113 @@
+/*
+	Copyright(c) 2021-2026 jvde.github@gmail.com
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#pragma once
+
+#include "Device.h"
+
+#ifdef HASSOAPYSDR
+#include <SoapySDR/Version.hpp>
+#include <SoapySDR/Modules.hpp>
+#include <SoapySDR/Registry.hpp>
+#include <SoapySDR/Device.hpp>
+#include <SoapySDR/Logger.hpp>
+
+namespace Device
+{
+
+	class SoapyDevice
+	{
+		std::string device;
+		int channel = 0;
+		int sample_rate = 0;
+
+	public:
+		SoapyDevice(std::string d, int c, int s) : device(d), channel(c), sample_rate(s) {}
+
+		const std::string &getDeviceString() { return device; }
+		int getChannel() { return channel; }
+		int getDefaultSampleRate() { return sample_rate; }
+	};
+
+	class SOAPYSDR : public Device
+	{
+
+		std::string device_args;
+		std::string antenna = "";
+		int channel = 0;
+		bool AGC = true;
+		bool print = false;
+
+		std::vector<SoapyDevice> dev_list;
+		SoapySDR::Device *dev = nullptr;
+
+		SoapySDR::Kwargs stream_args;
+		SoapySDR::Kwargs setting_args;
+		SoapySDR::Kwargs gains_args;
+
+		bool skip_unmake = false;
+
+		std::thread async_thread;
+		std::thread run_thread;
+
+		void PrintActuals(void);
+
+		bool lost = true;
+
+		FIFO fifo;
+
+		void RunAsync();
+		void Run();
+
+		static const uint32_t BUFFER_SIZE = 16 * 16384;
+
+		void applySettings();
+
+	public:
+		SOAPYSDR();
+
+		void Open(uint64_t h);
+		void Play();
+		void Stop();
+		void Close();
+
+		bool isStreaming() { return Device::isStreaming() && !lost; }
+		bool isCallback() { return true; }
+
+		void getDeviceList(std::vector<Description> &DeviceList);
+
+		std::string getProduct() { return "SOAPYSDR"; }
+
+		void setFormat(Format f) {}
+
+		Setting &SetKey(AIS::Keys key, const std::string &arg);
+		std::string Get();
+	};
+}
+
+#else // HASSOAPYSDR
+
+namespace Device
+{
+	class SOAPYSDR : public Unavailable
+	{
+	public:
+		SOAPYSDR() : Unavailable("SOAPYSDR", "HASSOAPYSDR", Type::SOAPYSDR) {}
+	};
+}
+
+#endif // HASSOAPYSDR

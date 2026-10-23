@@ -13,13 +13,38 @@
 #include <android/log.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
 #include <pthread.h>
 
 #include "rtl-ais/rtl_ais.h"
 
+extern void rtlsdr_set_fd(int fd);  /* librtlsdr fd 오픈 */
+
 #define TAG "AISWatch-JNI"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
+
+/* ─── 진단 로그 버퍼 (화면 표시용, logcat 불필요) ───────── */
+static char g_diag[6000];
+static int  g_diaglen = 0;
+void aiswatch_diag(const char *fmt, ...) {
+    char line[300];
+    va_list ap; va_start(ap, fmt);
+    vsnprintf(line, sizeof(line), fmt, ap);
+    va_end(ap);
+    __android_log_print(ANDROID_LOG_INFO, "AISWATCH-NATIVE", "%s", line);
+    int n = (int)strlen(line);
+    if (g_diaglen + n + 2 < (int)sizeof(g_diag)) {
+        memcpy(g_diag + g_diaglen, line, n); g_diaglen += n;
+        g_diag[g_diaglen++] = '\n'; g_diag[g_diaglen] = 0;
+    }
+}
+#define LOGI(...) aiswatch_diag(__VA_ARGS__)
+#define LOGE(...) aiswatch_diag(__VA_ARGS__)
+
+/* AIS-catcher 복조 브리지 */
+extern int  aiswatch_aisc_init(void);
+extern int  aiswatch_aisc_next(char* buf, int buflen);
+extern void aiswatch_aisc_cleanup(void);
 
 /* ─── 전역 상태 ───────────────────────────────────────── */
 static struct rtl_ais_context *g_ctx = NULL;
@@ -60,10 +85,11 @@ static int queue_pop(char *out) {
 /* ─── 메시지 수집 스레드 ──────────────────────────────── */
 static void *msg_thread_fn(void *arg) {
     LOGI("메시지 수집 스레드 시작");
-    while (g_running && g_ctx) {
-        const char *msg = rtl_ais_next_message(g_ctx);
-        if (msg && strlen(msg) > 5) {
-            queue_push(msg);
+    while (g_running) {
+        char nbuf[128];
+        int n = aiswatch_aisc_next(nbuf, sizeof(nbuf));
+        if (n > 5) {
+            queue_push(nbuf);
         } else {
             struct timespec ts = {0, 5000000}; /* 5ms */
             nanosleep(&ts, NULL);
@@ -82,7 +108,7 @@ static void *msg_thread_fn(void *arg) {
  */
 JNIEXPORT jint JNICALL
 Java_com_aiswatch_RtlSdrDriver_startReceiving(
-        JNIEnv *env, jobject thiz, jint fd, jint ppm)
+        JNIEnv *env, jobject thiz, jint fd, jint ppm, jint gain)
 {
     if (g_running) {
         LOGE("이미 수신 중");
@@ -96,25 +122,36 @@ Java_com_aiswatch_RtlSdrDriver_startReceiving(
     g_cfg.right_freq = 162025000; /* 162.025 MHz (채널 B) */
     g_cfg.ppm_error  = (int)ppm;
     g_cfg.custom_ppm = (ppm != 0) ? 1 : 0;
-    g_cfg.gain       = -100;      /* 자동 게인 */
+    g_cfg.gain       = (gain > 0) ? (int)gain : 420;  /* 앱에서 조절 (0.1dB 단위) */
+    g_cfg.rtl_agc    = 0;         /* RTL AGC OFF (과포화·불안정 방지) */
     g_cfg.use_internal_aisdecoder = 1;
 
     /* UDP 출력 비활성화 (내부에서 직접 메시지 수집) */
     g_cfg.host = "127.0.0.1";
     g_cfg.port = "10110";
 
-    /* fd를 이용해 장치 열기 (librtlsdr의 rtlsdr_open_fd 사용) */
-    /* rtlsdr_open_fd()는 librtlsdr >= 0.6.0에서 지원 */
-    g_cfg.dev_index = fd; /* fd 전달 방식은 librtlsdr 버전에 따라 다름 */
+    /* Java에서 받은 USB fd 를 librtlsdr 에 등록 → rtlsdr_open 이 이 fd 사용 */
+    aiswatch_diag("JNI: USB fd=%d 받음, rtlsdr_set_fd 호출", (int)fd);
+    rtlsdr_set_fd((int)fd);
+    g_cfg.dev_given = 1;   /* USB 재탐색 방지 */
+    g_cfg.dev_index = 0;
 
     LOGI("AIS 수신 시작: 좌=%d Hz, 우=%d Hz, ppm=%d",
          g_cfg.left_freq, g_cfg.right_freq, ppm);
 
+    aiswatch_diag("JNI: AIS-catcher 브리지 초기화...");
+    if (aiswatch_aisc_init() != 0) {
+        aiswatch_diag("JNI: 브리지 초기화 실패");
+        return -3;
+    }
+    aiswatch_diag("JNI: 브리지 초기화 성공");
+    aiswatch_diag("JNI: rtl_ais_start 호출...");
     g_ctx = rtl_ais_start(&g_cfg);
     if (!g_ctx) {
-        LOGE("rtl_ais_start 실패");
+        aiswatch_diag("JNI: rtl_ais_start 실패(NULL) → 오픈/튜너 초기화 실패");
         return -2;
     }
+    aiswatch_diag("JNI: rtl_ais_start 성공, 수신 스레드 시작");
 
     g_running = 1;
     pthread_create(&g_msg_thread, NULL, msg_thread_fn, NULL);
@@ -129,11 +166,12 @@ Java_com_aiswatch_RtlSdrDriver_stopReceiving(JNIEnv *env, jobject thiz)
 {
     LOGI("AIS 수신 중지 요청");
     g_running = 0;
+    pthread_join(g_msg_thread, NULL);   /* 메시지 스레드 먼저 정지 */
     if (g_ctx) {
-        rtl_ais_cleanup(g_ctx);
+        rtl_ais_cleanup(g_ctx);         /* 그 다음 ctx 정리 */
         g_ctx = NULL;
     }
-    pthread_join(g_msg_thread, NULL);
+    aiswatch_aisc_cleanup();            /* AIS-catcher 브리지 정리 */
     LOGI("AIS 수신 중지 완료");
 }
 
@@ -153,4 +191,17 @@ JNIEXPORT jboolean JNICALL
 Java_com_aiswatch_RtlSdrDriver_isRunning(JNIEnv *env, jobject thiz)
 {
     return (jboolean)(g_running && g_ctx && rtl_ais_isactive(g_ctx));
+}
+
+/* ─── 진단 로그 조회/초기화 (Kotlin에서 화면 표시) ───────── */
+JNIEXPORT jstring JNICALL
+Java_com_aiswatch_RtlSdrDriver_getDiagLog(JNIEnv *env, jobject thiz)
+{
+    return (*env)->NewStringUTF(env, g_diag);
+}
+
+JNIEXPORT void JNICALL
+Java_com_aiswatch_RtlSdrDriver_clearDiag(JNIEnv *env, jobject thiz)
+{
+    g_diaglen = 0; g_diag[0] = 0;
 }

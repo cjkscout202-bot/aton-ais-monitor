@@ -28,6 +28,12 @@
 #define MAX_FILENAME_SIZE 512
 #define ERROR_MESSAGE_LENGTH 1024
 #include "sounddecoder.h"
+#ifdef __ANDROID__
+extern void aiswatch_diag(const char *fmt, ...);
+#else
+#define aiswatch_diag(...)
+#endif
+#include <time.h>
 
 
 char errorSoundDecoder[ERROR_MESSAGE_LENGTH];
@@ -73,7 +79,18 @@ void run_mem_decoder(short * buf, int len,int max_buf_len)
 	memcpy(buffer,p+offset,bytes_in_len);
 	buffer_read=bytes_in_len/(channels*sizeof(short));
 	readBuffers();
-	
+
+	/* Android 진단: 3초마다 복조 통계 (CRC오류>0 이면 신호는 잡히나 품질문제) */
+	{ static time_t _ld=0; time_t _n=time(NULL);
+	  if(_n - _ld >= 3){ _ld=_n;
+	    struct demod_state_t *da = rx_a->decoder; struct demod_state_t *db = rx_b->decoder;
+	    aiswatch_diag("복조통계 A:정상%d CRC오류%d 크기오류%d B:정상%d CRC오류%d 크기오류%d",
+	        da->receivedframes, da->lostframes, da->lostframes2,
+	        db->receivedframes, db->lostframes, db->lostframes2);
+	    { int _mn=32767,_mx=-32768; long _sa=0; int _j,_lim=len*channels; if(_lim>4000)_lim=4000;
+	      for(_j=0;_j<_lim;_j++){ int _v=buf[_j]; if(_v<_mn)_mn=_v; if(_v>_mx)_mx=_v; _sa+=(_v<0?-_v:_v); }
+	      aiswatch_diag("복조출력 min=%d max=%d 평균절대=%ld (밋밋하면 복조약함)", _mn, _mx, _lim>0?_sa/_lim:0); } } }
+
 	if(time_print_stats && (time(NULL)-tprev >= time_print_stats))
 	{
 		struct demod_state_t *d = rx_a->decoder;

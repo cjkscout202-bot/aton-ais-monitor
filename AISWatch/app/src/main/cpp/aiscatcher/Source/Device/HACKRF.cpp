@@ -1,0 +1,175 @@
+/*
+	Copyright(c) 2021-2026 jvde.github@gmail.com
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#ifdef HASHACKRF
+
+#include <cstdlib>
+#include <cstring>
+#include <mutex>
+
+#include "HACKRF.h"
+
+namespace Device
+{
+
+	//---------------------------------------
+	// Device HACKRF
+
+	hackrf_device_list_t *HACKRF::list = nullptr;
+
+	// The hackrf library is initialized on first use, not on construction, and
+	// held until process exit. A failed init is retried on the next call.
+	static std::mutex api_mtx;
+	static bool api_open = false;
+
+	static bool ensureAPI()
+	{
+		std::lock_guard<std::mutex> lock(api_mtx);
+
+		if (!api_open && hackrf_init() == HACKRF_SUCCESS)
+		{
+			api_open = true;
+			std::atexit([]() { hackrf_exit(); });
+		}
+		return api_open;
+	}
+
+	void HACKRF::Open(uint64_t h)
+	{
+		// getDeviceList() frees and rebuilds the shared list under the same lock
+		std::lock_guard<std::mutex> lock(api_mtx);
+
+		if (!list)
+			throw std::runtime_error("HACKRF: cannot open device, internal error.");
+		if (h >= (uint64_t)list->devicecount)
+			throw std::runtime_error("HACKRF: cannot open device.");
+
+		int result = hackrf_open_by_serial(list->serial_numbers[h], &device);
+		if (result != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot open device.");
+
+		Device::Open(h);
+		serial = list->serial_numbers[h];
+	}
+
+	void HACKRF::Close()
+	{
+		Device::Close();
+		hackrf_close(device);
+	}
+
+	void HACKRF::Play()
+	{
+		applySettings();
+
+		if (hackrf_start_rx(device, HACKRF::callback_static, this) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: Cannot open device");
+		Device::Play();
+
+		SleepSystem(10);
+	}
+
+	void HACKRF::Stop()
+	{
+		if (Device::isStreaming())
+		{
+			Device::Stop();
+			hackrf_stop_rx(device);
+		}
+	}
+
+	int HACKRF::callback_static(hackrf_transfer *tf)
+	{
+		((HACKRF *)tf->rx_ctx)->callback(tf->buffer, tf->valid_length);
+		return 0;
+	}
+
+	void HACKRF::callback(uint8_t *data, int len)
+	{
+		RAW r = {Format::CS8, data, len};
+		Send(&r, 1, tag);
+	}
+
+	void HACKRF::applySettings()
+	{
+		if (hackrf_set_amp_enable(device, preamp ? 1 : 0) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot set amp.");
+		if (hackrf_set_lna_gain(device, LNA_Gain) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot set LNA gain.");
+		if (hackrf_set_vga_gain(device, VGA_Gain) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot set VGA gain.");
+
+		if (hackrf_set_sample_rate(device, sample_rate) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot set sample rate.");
+		if (hackrf_set_baseband_filter_bandwidth(device, hackrf_compute_baseband_filter_bw(sample_rate)) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot set bandwidth filter to auto.");
+		if (hackrf_set_freq(device, getCorrectedFrequency()) != HACKRF_SUCCESS)
+			throw std::runtime_error("HACKRF: cannot set frequency.");
+	}
+
+	void HACKRF::getDeviceList(std::vector<Description> &DeviceList)
+	{
+		if (!ensureAPI())
+		{
+			Warning() << "HACKRF: cannot open hackrf library, no HackRF devices available.";
+			return;
+		}
+
+		std::lock_guard<std::mutex> lock(api_mtx);
+
+		if (list)
+			hackrf_device_list_free(list);
+		list = hackrf_device_list();
+
+		for (int i = 0; i < list->devicecount; i++)
+		{
+			if (list->serial_numbers[i])
+			{
+				std::stringstream serial;
+				serial << std::uppercase << list->serial_numbers[i];
+				DeviceList.push_back(Description("HACKRF", "Great Scott Gadgets", serial.str(), (uint64_t)i, Type::HACKRF));
+			}
+		}
+	}
+	Setting &HACKRF::SetKey(AIS::Keys key, const std::string &arg)
+	{
+		switch (key)
+		{
+		case AIS::KEY_SETTING_LNA:
+			LNA_Gain = ((Util::Parse::Integer(arg, 0, 40) + 4) / 8) * 8;
+			break;
+		case AIS::KEY_SETTING_VGA:
+			VGA_Gain = ((Util::Parse::Integer(arg, 0, 62) + 1) / 2) * 2;
+			break;
+		case AIS::KEY_SETTING_PREAMP:
+			preamp = Util::Parse::Switch(arg);
+			break;
+		default:
+			Device::SetKey(key, arg);
+			break;
+		}
+		return *this;
+	}
+
+	std::string HACKRF::Get()
+	{
+
+		return Device::Get() + " lna " + std::to_string(LNA_Gain) + " vga " + std::to_string(VGA_Gain) + " preamp " + Util::Convert::toString(preamp);
+	}
+}
+
+#endif
